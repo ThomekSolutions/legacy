@@ -21,13 +21,16 @@ Then open:
 - Create a character and a House.
 - Connect to an authoritative Node/WebSocket server.
 - Start in a monster-free haven.
-- Step onto the portal tile to enter the combat ruins.
-- Return to the haven through the ruins portal.
+- Step onto the portal tile to enter the first combat biome.
+- Progress through five combat depths, each with a distinct biome.
+- Use the portal at the far end of a combat map to go deeper.
+- Use the return portal to go back to the previous map; only depth 1 returns to the haven.
 - See other players connected to the same server.
 - Explore a top-down 2D map without page scrolling.
 - Attack with `Left click` or `Space`, aimed toward the mouse.
 - Move with `ZQSD`, `WASD`, or the arrow keys.
 - Pick up loot.
+- Fight stronger Orcs as the maps get deeper.
 - Survive, grow stronger, then die permanently.
 - The dynasty, graves, records, and some relics persist in the server Hall of Legends.
 - The player uses Soldier sprites and enemies use Orc sprites from the provided pack.

@@ -295,6 +295,7 @@ class LegacyScene extends Phaser.Scene {
     this.destroyDynamicEntities();
     this.staticGraphics?.destroy();
     this.worldMapImage?.destroy();
+    this.destroyPortalObjects();
     if (this.worldMapTextureKey && this.textures.exists(this.worldMapTextureKey)) this.textures.remove(this.worldMapTextureKey);
     this.tileObjects = [];
     this.wallObjects = [];
@@ -312,7 +313,7 @@ class LegacyScene extends Phaser.Scene {
     canvas.height = WORLD_PIXEL_H;
     const context = canvas.getContext("2d");
     context.imageSmoothingEnabled = false;
-    context.fillStyle = snapshot.id === "combat" ? "#0d0f10" : "#101712";
+    context.fillStyle = snapshot.id?.startsWith("combat") ? "#0d0f10" : "#101712";
     context.fillRect(0, 0, canvas.width, canvas.height);
 
     for (let y = 0; y < WORLD_H; y += 1) {
@@ -566,18 +567,46 @@ class LegacyScene extends Phaser.Scene {
   }
 
   updatePortal() {
-    const portal = snapshot.portal;
-    if (!portal) return;
-    const tileX = Math.floor(portal.x / TILE) * TILE;
-    const tileY = Math.floor(portal.y / TILE) * TILE;
-    if (!this.portalObjects) {
-      this.portalObjects = {
-        tile: this.add.rectangle(tileX, tileY, TILE, TILE).setOrigin(0).setStrokeStyle(2, 0xc7a5ff, 0.95).setDepth(8),
-        text: this.add.text(tileX + TILE / 2, tileY - 8, portal.label, { fontFamily: "system-ui", fontSize: "12px", color: "#ece7dc" }).setOrigin(0.5, 1).setDepth(20),
-      };
+    const portals = snapshot.portals || (snapshot.portal ? [snapshot.portal] : []);
+    if (!portals.length) {
+      this.destroyPortalObjects();
+      return;
     }
-    this.portalObjects.tile.setPosition(tileX, tileY).setStrokeStyle(2, snapshot.id === "haven" ? 0xc7a5ff : 0xd0ba77, 0.95);
-    this.portalObjects.text.setPosition(tileX + TILE / 2, tileY - 8).setText(portal.label);
+    if (!this.portalObjects) this.portalObjects = new Map();
+    const seen = new Set();
+    portals.forEach((portal, index) => {
+      const key = `${portal.x}-${portal.y}-${index}`;
+      seen.add(key);
+      const tileX = Math.floor(portal.x / TILE) * TILE;
+      const tileY = Math.floor(portal.y / TILE) * TILE;
+      let object = this.portalObjects.get(key);
+      if (!object) {
+        object = {
+          tile: this.add.rectangle(tileX, tileY, TILE, TILE).setOrigin(0).setStrokeStyle(2, 0xc7a5ff, 0.95).setDepth(8),
+          text: this.add.text(tileX + TILE / 2, tileY - 8, portal.label, { fontFamily: "system-ui", fontSize: "12px", color: "#ece7dc" }).setOrigin(0.5, 1).setDepth(20),
+        };
+        this.portalObjects.set(key, object);
+      }
+      const color = portal.target === "haven" ? 0xc7a5ff : portal.target?.startsWith("combat") ? 0xd0ba77 : 0x8fbdd9;
+      object.tile.setPosition(tileX, tileY).setStrokeStyle(2, color, 0.95);
+      object.text.setPosition(tileX + TILE / 2, tileY - 8).setText(portal.label);
+    });
+    for (const [key, object] of this.portalObjects.entries()) {
+      if (seen.has(key)) continue;
+      object.tile.destroy();
+      object.text.destroy();
+      this.portalObjects.delete(key);
+    }
+  }
+
+  destroyPortalObjects() {
+    if (!this.portalObjects) return;
+    for (const object of this.portalObjects.values()) {
+      object.tile.destroy();
+      object.text.destroy();
+    }
+    this.portalObjects.clear();
+    this.portalObjects = null;
   }
 
   updateWorldEvent(time) {

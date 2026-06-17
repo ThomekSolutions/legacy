@@ -17,6 +17,13 @@ const BASE_ATTACK = {
   range: 78,
   halfWidth: 18,
 };
+const COMBAT_MAPS = [
+  { id: "combat", name: "Ruined Outskirts", depth: 1, floor: "ruin", accent: "grave", hazard: "water", previous: "haven", next: "combat2" },
+  { id: "combat2", name: "Marsh Causeway", depth: 2, floor: "marsh", accent: "ruin", hazard: "water", previous: "combat", next: "combat3" },
+  { id: "combat3", name: "Grave Barrens", depth: 3, floor: "grave", accent: "tomb", hazard: "marsh", previous: "combat2", next: "combat4" },
+  { id: "combat4", name: "Wildwood Hollow", depth: 4, floor: "grass", accent: "forest", hazard: "marsh", previous: "combat3", next: "combat5" },
+  { id: "combat5", name: "Ashen Keep", depth: 5, floor: "ruin", accent: "rubble", hazard: "grave", previous: "combat4", next: null },
+];
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -37,24 +44,46 @@ const worlds = {
     enemies: [],
     loot: [],
     combatTexts: [],
-    portal: { x: 40 * TILE, y: 36 * TILE, target: "combat", label: "To the ruins" },
+    portals: [{ x: 40 * TILE, y: 36 * TILE, target: "combat", label: "To the ruins", spawnX: 40 * TILE, spawnY: 70 * TILE }],
   },
-  combat: {
-    id: "combat",
-    name: "Combat Ruins",
-    tiles: createWorld("combat"),
+};
+worlds.haven.portal = worlds.haven.portals[0];
+
+for (const map of COMBAT_MAPS) {
+  const portals = [
+    {
+      x: 40 * TILE,
+      y: 72 * TILE,
+      target: map.previous,
+      label: map.previous === "haven" ? "Back to haven" : "Back",
+      spawnX: map.previous === "haven" ? 40 * TILE : 40 * TILE,
+      spawnY: map.previous === "haven" ? 43 * TILE : 10 * TILE,
+    },
+  ];
+  if (map.next) {
+    portals.push({ x: 40 * TILE, y: 8 * TILE, target: map.next, label: "Deeper", spawnX: 40 * TILE, spawnY: 70 * TILE });
+  }
+  worlds[map.id] = {
+    id: map.id,
+    name: map.name,
+    depth: map.depth,
+    tiles: createWorld(map.id),
     enemies: [],
     loot: [],
     combatTexts: [],
-    portal: { x: 42 * TILE, y: 42 * TILE, target: "haven", label: "Back to haven" },
-    event: { name: "Ash Portal", x: 20 * TILE, y: 18 * TILE, pulse: 0, spawned: false },
-  },
-};
+    portals,
+    portal: portals[0],
+    event: map.depth === 1 ? { name: "Ash Portal", x: 20 * TILE, y: 18 * TILE, pulse: 0, spawned: false } : null,
+  };
+}
 
-for (let i = 0; i < 32; i += 1) worlds.combat.enemies.push(makeEnemy());
-for (let i = 0; i < 26; i += 1) {
-  const point = randomPassablePoint("combat");
-  worlds.combat.loot.push(makeLoot(point.x, point.y));
+for (const map of COMBAT_MAPS) {
+  const world = worlds[map.id];
+  for (let i = 0; i < 24 + map.depth * 6; i += 1) world.enemies.push(makeEnemy(map.id, map.depth * 2 - 2));
+  for (let i = 0; i < 18 + map.depth * 3; i += 1) {
+    const point = randomPassablePoint(map.id);
+    world.loot.push(makeLoot(point.x, point.y, map.depth >= 4 && rng() < 0.28));
+  }
 }
 
 const clients = new Map();
@@ -218,14 +247,15 @@ function updatePlayer(player) {
 function attack(player) {
   player.attackCd = 0.42;
   player.facing = Math.cos(player.input.angle) >= 0 ? 1 : -1;
-  if (player.world !== "combat") return;
+  const world = worlds[player.world];
+  if (!isCombatWorld(world)) return;
   const attackSpec = getAttackSpec(player);
   const range = attackSpec.range;
   const hitRadius = attackSpec.halfWidth;
   const ax = Math.cos(player.input.angle);
   const ay = Math.sin(player.input.angle);
   const targets = [];
-  for (const enemy of worlds.combat.enemies) {
+  for (const enemy of world.enemies) {
     const ex = enemy.x - player.x;
     const ey = enemy.y - player.y;
     const along = ex * ax + ey * ay;
@@ -242,19 +272,19 @@ function attack(player) {
     const dealt = Math.min(damage, Math.max(0, enemy.hp));
     enemy.hp -= damage;
     enemy.hitBy = player.id;
-    addDamageText(worlds.combat, enemy.x, enemy.y - 30, dealt);
+    addDamageText(world, enemy.x, enemy.y - 30, dealt);
     if (enemy.hp <= 0) dead.push(enemy);
   }
 
   for (const enemy of dead) {
-    const index = worlds.combat.enemies.indexOf(enemy);
+    const index = world.enemies.indexOf(enemy);
     if (index === -1) continue;
     player.kills += 1;
     player.xp += enemy.level * 10;
     player.gold += 4 + enemy.level;
-    if (rng() < 0.32) worlds.combat.loot.push(makeLoot(enemy.x, enemy.y, enemy.level >= 5));
-    worlds.combat.enemies.splice(index, 1);
-    worlds.combat.enemies.push(makeEnemy(Math.floor(player.level / 2)));
+    if (rng() < 0.32) world.loot.push(makeLoot(enemy.x, enemy.y, enemy.level >= 5 || world.depth >= 4));
+    world.enemies.splice(index, 1);
+    world.enemies.push(makeEnemy(world.id, Math.floor(player.level / 2) + (world.depth - 1) * 2));
     while (player.xp >= player.level * 26) levelUp(player);
   }
 }
@@ -268,8 +298,9 @@ function levelUp(player) {
 }
 
 function collectLoot(player) {
-  if (player.world !== "combat") return;
-  const loot = worlds.combat.loot;
+  const world = worlds[player.world];
+  if (!isCombatWorld(world)) return;
+  const loot = world.loot;
   for (let i = loot.length - 1; i >= 0; i -= 1) {
     const item = loot[i];
     if (distance(player, item) < 24) {
@@ -281,54 +312,53 @@ function collectLoot(player) {
 }
 
 function maybeWarp(player) {
-  const portal = worlds[player.world].portal;
   if (player.portalCd > 0 || tileAt(worlds[player.world], player.x, player.y) !== "portal") return;
-  if (portal.target === "combat") {
-    player.world = "combat";
-    player.x = 42 * TILE;
-    player.y = 45 * TILE;
-  } else {
-    player.world = "haven";
-    player.x = 40 * TILE;
-    player.y = 43 * TILE;
+  const portal = getTouchedPortal(player);
+  if (!portal || !worlds[portal.target]) return;
+  player.world = portal.target;
+  player.x = portal.spawnX ?? 40 * TILE;
+  player.y = portal.spawnY ?? 42 * TILE;
+  if (portal.target === "haven") {
     player.hp = Math.min(player.maxHp, player.hp + 30);
   }
   player.portalCd = 1.2;
 }
 
 function updateEnemies() {
-  const combatPlayers = [...clients.values()].filter((p) => !p.dead && p.world === "combat");
-  for (const enemy of worlds.combat.enemies) {
-    let target = null;
-    let nearest = 9999;
-    for (const player of combatPlayers) {
-      const dist = distance(enemy, player);
-      if (dist < nearest) {
-        nearest = dist;
-        target = player;
+  for (const world of Object.values(worlds).filter(isCombatWorld)) {
+    const combatPlayers = [...clients.values()].filter((p) => !p.dead && p.world === world.id);
+    for (const enemy of world.enemies) {
+      let target = null;
+      let nearest = 9999;
+      for (const player of combatPlayers) {
+        const dist = distance(enemy, player);
+        if (dist < nearest) {
+          nearest = dist;
+          target = player;
+        }
       }
-    }
 
-    let vx = Math.cos(enemy.wander);
-    let vy = Math.sin(enemy.wander);
-    if (target && nearest < 310) {
-      vx = (target.x - enemy.x) / nearest;
-      vy = (target.y - enemy.y) / nearest;
-    } else if (rng() < 0.02) {
-      enemy.wander = rng() * Math.PI * 2;
-    }
+      let vx = Math.cos(enemy.wander);
+      let vy = Math.sin(enemy.wander);
+      if (target && nearest < 310) {
+        vx = (target.x - enemy.x) / nearest;
+        vy = (target.y - enemy.y) / nearest;
+      } else if (rng() < 0.02) {
+        enemy.wander = rng() * Math.PI * 2;
+      }
 
-    enemy.moving = true;
-    if (Math.abs(vx) > 0.08) enemy.facing = vx > 0 ? 1 : -1;
-    const nx = clamp(enemy.x + vx * enemy.speed * DT, TILE, WORLD_W * TILE - TILE);
-    const ny = clamp(enemy.y + vy * enemy.speed * DT, TILE, WORLD_H * TILE - TILE);
-    moveEntity(enemy, worlds.combat, nx, ny);
+      enemy.moving = true;
+      if (Math.abs(vx) > 0.08) enemy.facing = vx > 0 ? 1 : -1;
+      const nx = clamp(enemy.x + vx * enemy.speed * DT, TILE, WORLD_W * TILE - TILE);
+      const ny = clamp(enemy.y + vy * enemy.speed * DT, TILE, WORLD_H * TILE - TILE);
+      moveEntity(enemy, world, nx, ny);
 
-    enemy.attackCd = Math.max(0, enemy.attackCd - DT);
-    if (target && nearest < 28 && enemy.attackCd <= 0) {
-      target.hp -= enemy.dmg;
-      enemy.attackCd = 1.05;
-      if (target.hp <= 0) killPlayer(target, enemy.name);
+      enemy.attackCd = Math.max(0, enemy.attackCd - DT);
+      if (target && nearest < 28 && enemy.attackCd <= 0) {
+        target.hp -= enemy.dmg;
+        enemy.attackCd = 1.05;
+        if (target.hp <= 0) killPlayer(target, enemy.name);
+      }
     }
   }
 }
@@ -340,7 +370,7 @@ function updateWorldEvent() {
   if (!near) return;
   event.spawned = true;
   for (let i = 0; i < 8; i += 1) {
-    const enemy = makeEnemy(3);
+    const enemy = makeEnemy("combat", 3);
     const point = randomPassablePointNear("combat", event.x, event.y, 190);
     enemy.x = point.x;
     enemy.y = point.y;
@@ -407,10 +437,7 @@ function killPlayer(player, cause) {
 }
 
 function broadcastWorld() {
-  const snapshots = {
-    haven: snapshotWorld("haven", false),
-    combat: snapshotWorld("combat", false),
-  };
+  const snapshots = Object.fromEntries(Object.keys(worlds).map((worldId) => [worldId, snapshotWorld(worldId, false)]));
 
   for (const player of clients.values()) {
     if (player.ws.readyState !== WebSocket.OPEN) continue;
@@ -434,6 +461,7 @@ function snapshotWorld(worldId, includeTiles) {
     id: worldId,
     name: world.name,
     portal: world.portal,
+    portals: world.portals || (world.portal ? [world.portal] : []),
     event: world.event || null,
     players: [...clients.values()].filter((p) => !p.dead && p.world === worldId).map((p) => ({
       id: p.id,
@@ -479,6 +507,20 @@ function snapshotWorld(worldId, includeTiles) {
   };
   if (includeTiles) snapshot.tiles = world.tiles;
   return snapshot;
+}
+
+function getTouchedPortal(player) {
+  const world = worlds[player.world];
+  const tileX = Math.floor(player.x / TILE) * TILE;
+  const tileY = Math.floor(player.y / TILE) * TILE;
+  return (world.portals || [world.portal]).find((portal) => {
+    if (!portal) return false;
+    return Math.floor(portal.x / TILE) * TILE === tileX && Math.floor(portal.y / TILE) * TILE === tileY;
+  });
+}
+
+function isCombatWorld(world) {
+  return Boolean(world && world.depth > 0);
 }
 
 function getAttackSpec(player) {
@@ -530,35 +572,49 @@ function createWorld(kind) {
     return tiles;
   }
 
-  if (kind === "combat") {
+  if (isCombatWorldDefinition(kind)) {
+    const map = COMBAT_MAPS.find((item) => item.id === kind) || COMBAT_MAPS[0];
+    const floor = map.floor;
+    const accent = map.accent;
+    const hazard = map.hazard;
+    const roomShift = (map.depth - 1) % 3;
     const rooms = [
-      { x: 34, y: 35, w: 17, h: 16, tile: "ruin" },
-      { x: 15, y: 12, w: 13, h: 12, tile: "ruin" },
-      { x: 11, y: 40, w: 13, h: 15, tile: "grave" },
-      { x: 26, y: 55, w: 16, h: 11, tile: "grave" },
-      { x: 49, y: 16, w: 15, h: 11, tile: "ruin" },
-      { x: 55, y: 36, w: 15, h: 14, tile: "ruin" },
-      { x: 49, y: 57, w: 16, h: 11, tile: "ruin" },
-      { x: 29, y: 16, w: 12, h: 10, tile: "ruin" },
+      { x: 33, y: 63, w: 15, h: 12, tile: floor },
+      { x: 32, y: 34, w: 17, h: 15, tile: floor },
+      { x: 15 + roomShift, y: 13, w: 14, h: 12, tile: floor },
+      { x: 11, y: 41 - roomShift, w: 14, h: 14, tile: accent },
+      { x: 50 - roomShift, y: 15, w: 15, h: 12, tile: floor },
+      { x: 55, y: 37, w: 15, h: 13, tile: accent },
+      { x: 30, y: 5, w: 20, h: 10, tile: floor },
+      { x: 50, y: 57, w: 16, h: 11, tile: floor },
     ];
     for (const room of rooms) carveRoom(room);
-    carveCorridor(42, 43, 21, 18, "ruin", 2);
-    carveCorridor(42, 43, 18, 47, "ruin", 2);
-    carveCorridor(42, 43, 34, 60, "ruin", 2);
-    carveCorridor(42, 43, 56, 22, "ruin", 2);
-    carveCorridor(42, 43, 62, 43, "ruin", 2);
-    carveCorridor(42, 43, 57, 62, "ruin", 2);
-    carveCorridor(35, 21, 21, 18, "ruin", 1);
-    carveRiver(58);
-    paintBridge(54, 22, 62, 22);
-    paintBridge(54, 43, 62, 43);
-    paintBridge(53, 62, 61, 62);
-    paintRect(42, 42, 1, 1, "portal");
-    paintEllipse(20, 18, 1, 1, "portal");
-    paintEllipse(20, 18, 5, 4, "ruin");
-    paintEllipse(30, 60, 7, 4, "grave");
-    scatter("ruin", "rubble", 35, 10, 70, 10, 70);
-    scatter("grave", "tomb", 22, 9, 43, 38, 67);
+    carveCorridor(40, 70, 40, 9, floor, 2);
+    carveCorridor(40, 41, 22 + roomShift, 19, floor, 2);
+    carveCorridor(40, 41, 18, 48 - roomShift, floor, 2);
+    carveCorridor(40, 41, 57 - roomShift, 21, floor, 2);
+    carveCorridor(40, 41, 62, 43, floor, 2);
+    carveCorridor(40, 67, 58, 62, floor, 2);
+    if (map.depth === 1 || map.depth === 2) {
+      carveRiver(58 - map.depth * 3);
+      paintBridge(52 - map.depth * 2, 22, 60 - map.depth * 2, 22);
+      paintBridge(52 - map.depth * 2, 43, 60 - map.depth * 2, 43);
+      paintBridge(51 - map.depth * 2, 62, 59 - map.depth * 2, 62);
+    } else {
+      paintEllipse(58, 24, 6, 4, hazard);
+      paintEllipse(18, 51, 6, 5, hazard);
+      paintEllipse(56, 62, 5, 3, hazard);
+    }
+    paintRect(40, 72, 1, 1, "portal");
+    if (map.next) paintRect(40, 8, 1, 1, "portal");
+    if (map.depth === 1) {
+      paintEllipse(20, 18, 1, 1, "portal");
+      paintEllipse(20, 18, 5, 4, floor);
+    }
+    paintEllipse(30, 60, 7, 4, accent);
+    scatter(floor, "rubble", 18 + map.depth * 5, 10, 70, 10, 70);
+    scatter(accent, accent === "tomb" ? "grave" : "tomb", 10 + map.depth * 3, 9, 70, 10, 70);
+    if (map.depth === 4) scatter("grass", "forest", 22, 10, 70, 10, 70);
     softenWallCorners();
   }
   return tiles;
@@ -669,20 +725,27 @@ function createWorld(kind) {
   }
 }
 
-function makeEnemy(levelBoost = 0) {
-  const names = ["Orc Scout", "Orc Brute", "Bone Knight", "Marsh Wight", "Ash Cultist"];
-  const level = 1 + Math.floor(rng() * 5) + levelBoost;
-  const point = randomPassablePoint("combat");
+function isCombatWorldDefinition(kind) {
+  return COMBAT_MAPS.some((map) => map.id === kind);
+}
+
+function makeEnemy(worldId = "combat", levelBoost = 0) {
+  const world = worlds[worldId];
+  const depth = world?.depth || 1;
+  const names = ["Orc Scout", "Orc Brute", "Orc Raider", "Orc Guard", "Orc Warlord"];
+  const level = 1 + Math.floor(rng() * 4) + levelBoost + (depth - 1) * 2;
+  const point = randomPassablePoint(worldId);
+  const hp = 28 + level * 13 + depth * 10;
   return {
     id: cryptoId(),
     name: names[Math.floor(rng() * names.length)],
     x: point.x,
     y: point.y,
     level,
-    hp: 30 + level * 13,
-    maxHp: 30 + level * 13,
-    dmg: 6 + level * 3,
-    speed: 38 + rng() * 25,
+    hp,
+    maxHp: hp,
+    dmg: 5 + level * 3 + depth,
+    speed: 38 + rng() * 22 + depth * 1.5,
     attackCd: 0,
     wander: rng() * Math.PI * 2,
     moving: false,
