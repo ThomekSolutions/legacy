@@ -14,6 +14,7 @@ const ui = {
   deathTitle: document.querySelector("#deathTitle"),
   deathSummary: document.querySelector("#deathSummary"),
   dynastyName: document.querySelector("#dynastyName"),
+  area: document.querySelector("#areaStat"),
   level: document.querySelector("#levelStat"),
   hp: document.querySelector("#hpStat"),
   gold: document.querySelector("#goldStat"),
@@ -971,6 +972,7 @@ function getAccountId() {
 function updateSidebar() {
   const self = getSelf();
   ui.dynastyName.textContent = meta?.dynasty ? `House ${meta.dynasty} Gen. ${meta.generation}` : "-";
+  ui.area.textContent = snapshot?.name || "Haven";
   ui.level.textContent = self?.level ?? meta?.records?.maxLevel ?? 1;
   ui.hp.textContent = self ? `${self.hp}/${self.maxHp}` : "-";
   ui.gold.textContent = self?.gold ?? 0;
