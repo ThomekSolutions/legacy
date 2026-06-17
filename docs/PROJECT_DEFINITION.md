@@ -53,7 +53,7 @@ The current prototype should stay simple until the core is fun. Recommended next
 
 Send the pack as a `.zip` in chat if the interface allows it, or place it in the project folder, for example:
 
-`C:\Users\thoma\Documents\Legacy\assets-pack.zip`
+`assets-pack.zip`
 
 Most useful for integration:
 

@@ -44,26 +44,28 @@ The server validates movement, attacks, loot, deaths, levels, graves, and relics
 
 ## Integrated Assets
 
-Sprites used by the game are copied here:
+Runtime character sprites are stored in:
 
-`C:\Users\thoma\Documents\Legacy\assets\characters`
+`assets/characters`
 
-The full extracted zip remains available here:
+Generated customizable character layers are stored in:
 
-`C:\Users\thoma\Documents\Legacy\assets\characters-pack`
+`assets/generated-characters`
 
-The 16x16 textures used by the maps are here:
+Map tiles and generated RPG textures are stored in:
 
-`C:\Users\thoma\Documents\Legacy\assets\tiles`
+`assets/tiles`
 
-The full extracted pack remains available here:
+UI buttons and window frames are stored in:
 
-`C:\Users\thoma\Documents\Legacy\assets\tiles-pack`
+`assets/ui`
 
-## Send An Asset Pack
+The original extracted source packs are intentionally ignored by Git. Keep only optimized runtime assets in the repository.
 
-The simplest way: drop the `.zip` into this folder:
+## Add New Assets
 
-`C:\Users\thoma\Documents\Legacy\assets-pack.zip`
+Place new source packs outside the repository or in an ignored local folder, then extract only the runtime sprites, tiles, or UI pieces needed by the game into `assets/`.
 
-Then simply say that the file is in place. I will extract it into a dedicated folder and replace prototype shapes with sprites/tiles from the pack.
+Regenerate procedural assets with:
+
+`npm run generate:characters`
