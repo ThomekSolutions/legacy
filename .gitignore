@@ -1,0 +1,6 @@
+node_modules/
+data/
+artifacts/
+assets/characters-pack/
+assets/tiles-pack/
+*.log

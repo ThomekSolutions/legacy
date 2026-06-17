@@ -1,0 +1,22 @@
+{
+  "name": "legacy",
+  "version": "1.0.0",
+  "description": "Legacy V1 playable multiplayer prototype.",
+  "main": "server.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check src/game.js",
+    "generate:characters": "node tools/generate-pixel-characters.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "phaser": "^4.1.0",
+    "ws": "^8.21.0"
+  }
+}

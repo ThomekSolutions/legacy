@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "source": "generated from ui-stone.png and buttons/button-long-normal.png",
+    "generatedBy": "tools/generate-ui-windows.js"
+  },
+  "frames": {
+    "panel": {
+      "file": "window-panel.png",
+      "nineSlice": {
+        "top": 28,
+        "right": 28,
+        "bottom": 28,
+        "left": 28
+      }
+    },
+    "popup": {
+      "file": "window-popup.png",
+      "nineSlice": {
+        "top": 24,
+        "right": 24,
+        "bottom": 24,
+        "left": 24
+      }
+    },
+    "sidebar": {
+      "file": "window-sidebar.png",
+      "nineSlice": {
+        "top": 26,
+        "right": 26,
+        "bottom": 26,
+        "left": 26
+      }
+    }
+  }
+}

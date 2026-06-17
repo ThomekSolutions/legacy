@@ -1,0 +1,110 @@
+{
+  "frameWidth": 100,
+  "frameHeight": 100,
+  "animations": {
+    "idle": 6,
+    "walk": 8,
+    "attack": 6
+  },
+  "layers": {
+    "body": {
+      "human": {
+        "idle": "assets/generated-characters/body-human-idle.png",
+        "walk": "assets/generated-characters/body-human-walk.png",
+        "attack": "assets/generated-characters/body-human-attack.png"
+      }
+    },
+    "armor": {
+      "leather": {
+        "idle": "assets/generated-characters/armor-leather-idle.png",
+        "walk": "assets/generated-characters/armor-leather-walk.png",
+        "attack": "assets/generated-characters/armor-leather-attack.png"
+      },
+      "iron": {
+        "idle": "assets/generated-characters/armor-iron-idle.png",
+        "walk": "assets/generated-characters/armor-iron-walk.png",
+        "attack": "assets/generated-characters/armor-iron-attack.png"
+      },
+      "dark": {
+        "idle": "assets/generated-characters/armor-dark-idle.png",
+        "walk": "assets/generated-characters/armor-dark-walk.png",
+        "attack": "assets/generated-characters/armor-dark-attack.png"
+      }
+    },
+    "helmet": {
+      "ironCap": {
+        "idle": "assets/generated-characters/helmet-ironCap-idle.png",
+        "walk": "assets/generated-characters/helmet-ironCap-walk.png",
+        "attack": "assets/generated-characters/helmet-ironCap-attack.png"
+      },
+      "horned": {
+        "idle": "assets/generated-characters/helmet-horned-idle.png",
+        "walk": "assets/generated-characters/helmet-horned-walk.png",
+        "attack": "assets/generated-characters/helmet-horned-attack.png"
+      },
+      "hood": {
+        "idle": "assets/generated-characters/helmet-hood-idle.png",
+        "walk": "assets/generated-characters/helmet-hood-walk.png",
+        "attack": "assets/generated-characters/helmet-hood-attack.png"
+      }
+    },
+    "weapon": {
+      "sword": {
+        "idle": "assets/generated-characters/weapon-sword-idle.png",
+        "walk": "assets/generated-characters/weapon-sword-walk.png",
+        "attack": "assets/generated-characters/weapon-sword-attack.png"
+      },
+      "axe": {
+        "idle": "assets/generated-characters/weapon-axe-idle.png",
+        "walk": "assets/generated-characters/weapon-axe-walk.png",
+        "attack": "assets/generated-characters/weapon-axe-attack.png"
+      },
+      "staff": {
+        "idle": "assets/generated-characters/weapon-staff-idle.png",
+        "walk": "assets/generated-characters/weapon-staff-walk.png",
+        "attack": "assets/generated-characters/weapon-staff-attack.png"
+      }
+    },
+    "shield": {
+      "round": {
+        "idle": "assets/generated-characters/shield-round-idle.png",
+        "walk": "assets/generated-characters/shield-round-walk.png",
+        "attack": "assets/generated-characters/shield-round-attack.png"
+      },
+      "tower": {
+        "idle": "assets/generated-characters/shield-tower-idle.png",
+        "walk": "assets/generated-characters/shield-tower-walk.png",
+        "attack": "assets/generated-characters/shield-tower-attack.png"
+      }
+    },
+    "cape": {
+      "red": {
+        "idle": "assets/generated-characters/cape-red-idle.png",
+        "walk": "assets/generated-characters/cape-red-walk.png",
+        "attack": "assets/generated-characters/cape-red-attack.png"
+      },
+      "blue": {
+        "idle": "assets/generated-characters/cape-blue-idle.png",
+        "walk": "assets/generated-characters/cape-blue-walk.png",
+        "attack": "assets/generated-characters/cape-blue-attack.png"
+      },
+      "green": {
+        "idle": "assets/generated-characters/cape-green-idle.png",
+        "walk": "assets/generated-characters/cape-green-walk.png",
+        "attack": "assets/generated-characters/cape-green-attack.png"
+      }
+    },
+    "mount": {
+      "horseBrown": {
+        "idle": "assets/generated-characters/mount-horseBrown-idle.png",
+        "walk": "assets/generated-characters/mount-horseBrown-walk.png",
+        "attack": "assets/generated-characters/mount-horseBrown-attack.png"
+      },
+      "horseGrey": {
+        "idle": "assets/generated-characters/mount-horseGrey-idle.png",
+        "walk": "assets/generated-characters/mount-horseGrey-walk.png",
+        "attack": "assets/generated-characters/mount-horseGrey-attack.png"
+      }
+    }
+  }
+}
