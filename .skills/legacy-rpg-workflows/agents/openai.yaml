@@ -1,0 +1,4 @@
+interface:
+  display_name: "Legacy RPG Workflows"
+  short_description: "Build maps, biomes, UI, and gameplay safely"
+  default_prompt: "Use $legacy-rpg-workflows to add a new biome, map, portal, UI asset, or recurring gameplay feature to Legacy."
