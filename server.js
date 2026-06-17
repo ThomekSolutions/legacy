@@ -61,7 +61,7 @@ for (const map of COMBAT_MAPS) {
     },
   ];
   if (map.next) {
-    portals.push({ x: 40 * TILE, y: 8 * TILE, target: map.next, label: "Deeper", spawnX: 40 * TILE, spawnY: 70 * TILE });
+    portals.push({ x: 40 * TILE, y: 10 * TILE, target: map.next, label: "Deeper", spawnX: 40 * TILE, spawnY: 70 * TILE });
   }
   worlds[map.id] = {
     id: map.id,
@@ -606,7 +606,7 @@ function createWorld(kind) {
       paintEllipse(56, 62, 5, 3, hazard);
     }
     paintRect(40, 72, 1, 1, "portal");
-    if (map.next) paintRect(40, 8, 1, 1, "portal");
+    if (map.next) paintRect(40, 10, 1, 1, "portal");
     if (map.depth === 1) {
       paintEllipse(20, 18, 1, 1, "portal");
       paintEllipse(20, 18, 5, 4, floor);

@@ -276,12 +276,16 @@ class LegacyScene extends Phaser.Scene {
   makePortalTexture(key, seed) {
     if (this.textures.exists(key)) return;
     const gfx = this.make.graphics({ x: 0, y: 0, add: false });
-    gfx.fillStyle(0x322249, 1);
+    gfx.fillStyle(seed % 2 ? 0x3b2862 : 0x2d204d, 1);
     gfx.fillRect(0, 0, TILE, TILE);
-    gfx.lineStyle(2, 0x8d62c0, 1);
-    gfx.strokeRect(6 + seed, 6, 20 - seed * 2, 20);
+    gfx.fillStyle(0x120d20, 0.55);
+    gfx.fillRect(4, 4, 24, 24);
     gfx.lineStyle(2, 0xc7a5ff, 1);
-    gfx.strokeRect(12, 12, 8, 8);
+    gfx.strokeRect(4.5, 4.5, 23, 23);
+    gfx.lineStyle(2, 0x8d62c0, 1);
+    gfx.strokeRect(10.5 + seed, 10.5, 11 - seed * 2, 11);
+    gfx.fillStyle(0xf0dcff, 0.82);
+    gfx.fillRect(15, 15, 2, 2);
     gfx.generateTexture(key, TILE, TILE);
     gfx.destroy();
   }
