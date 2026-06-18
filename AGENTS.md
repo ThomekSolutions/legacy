@@ -36,9 +36,12 @@ Legacy is a playable browser RPG prototype.
 
 ## UI And Assets
 
+- Default typography is `Fondamento` with `"Trebuchet MS", Georgia, serif` fallback; use it for site UI and Phaser text unless a specific asset requires otherwise.
 - Buttons use `assets/ui/buttons/*`.
 - Window frames use `assets/ui/windows/*`.
-- Character layers are generated into `assets/generated-characters/`.
+- Character layers and cosmetics are generated into `assets/generated-characters/`.
+- `assets/generated-characters/catalog.json` is the source of truth for character slots, labels, rarities, defaults, and spritesheets.
+- Add hats, mounts, capes, pets, auras, and future cosmetics through `tools/generate-pixel-characters.js`, then run `npm run generate:characters` and `npm run verify:characters`.
 - For UI asset changes, prefer real cropped/generated assets over CSS approximations.
 - Keep mobile HUD compact and check that text fits its frame.
 

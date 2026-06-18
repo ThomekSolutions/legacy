@@ -1,0 +1,51 @@
+{
+  "frameWidth": 100,
+  "frameHeight": 100,
+  "animations": {
+    "idle": 6,
+    "walk": 8,
+    "attack": 6
+  },
+  "monsters": [
+    {
+      "id": "ruinCrawler",
+      "label": "Ruin crawler",
+      "tier": "low",
+      "spritesheets": {
+        "idle": "assets/generated-monsters/ruinCrawler-idle.png",
+        "walk": "assets/generated-monsters/ruinCrawler-walk.png",
+        "attack": "assets/generated-monsters/ruinCrawler-attack.png"
+      }
+    },
+    {
+      "id": "marshMaw",
+      "label": "Marsh maw",
+      "tier": "mid",
+      "spritesheets": {
+        "idle": "assets/generated-monsters/marshMaw-idle.png",
+        "walk": "assets/generated-monsters/marshMaw-walk.png",
+        "attack": "assets/generated-monsters/marshMaw-attack.png"
+      }
+    },
+    {
+      "id": "graveWraith",
+      "label": "Grave wraith",
+      "tier": "mid",
+      "spritesheets": {
+        "idle": "assets/generated-monsters/graveWraith-idle.png",
+        "walk": "assets/generated-monsters/graveWraith-walk.png",
+        "attack": "assets/generated-monsters/graveWraith-attack.png"
+      }
+    },
+    {
+      "id": "cinderBrute",
+      "label": "Cinder brute",
+      "tier": "high",
+      "spritesheets": {
+        "idle": "assets/generated-monsters/cinderBrute-idle.png",
+        "walk": "assets/generated-monsters/cinderBrute-walk.png",
+        "attack": "assets/generated-monsters/cinderBrute-attack.png"
+      }
+    }
+  ]
+}

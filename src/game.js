@@ -5,12 +5,22 @@ const ui = {
   newHeirButton: document.querySelector("#newHeirButton"),
   heroName: document.querySelector("#heroName"),
   houseName: document.querySelector("#houseName"),
+  bodySelect: document.querySelector("#bodySelect"),
+  skinSelect: document.querySelector("#skinSelect"),
+  hairSelect: document.querySelector("#hairSelect"),
   armorSelect: document.querySelector("#armorSelect"),
   helmetSelect: document.querySelector("#helmetSelect"),
+  hatSelect: document.querySelector("#hatSelect"),
   weaponSelect: document.querySelector("#weaponSelect"),
   shieldSelect: document.querySelector("#shieldSelect"),
   capeSelect: document.querySelector("#capeSelect"),
   mountSelect: document.querySelector("#mountSelect"),
+  petSelect: document.querySelector("#petSelect"),
+  auraSelect: document.querySelector("#auraSelect"),
+  creatorPreviewStage: document.querySelector("#creatorPreviewStage"),
+  previewModeTabs: document.querySelector("#previewModeTabs"),
+  appearanceTabs: document.querySelector("#appearanceTabs"),
+  appearanceOptions: document.querySelector("#appearanceOptions"),
   deathTitle: document.querySelector("#deathTitle"),
   deathSummary: document.querySelector("#deathSummary"),
   dynastyName: document.querySelector("#dynastyName"),
@@ -36,10 +46,16 @@ const SEND_RATE_MS = 16;
 const WORLD_PIXEL_W = WORLD_W * TILE;
 const WORLD_PIXEL_H = WORLD_H * TILE;
 const CHARACTER_FRAME = 100;
-const CHARACTER_SCALE = 1.18;
+const CHARACTER_SCALE = 0.59;
+const ENEMY_SCALE = 0.588;
+const MOUNTED_BODY_VISIBLE_HEIGHT = 57;
+const UI_FONT = '"Fondamento", "Trebuchet MS", Georgia, serif';
+const CATALOG_URL = "assets/generated-characters/catalog.json";
+const MONSTER_CATALOG_URL = "assets/generated-monsters/catalog.json";
+const DEFAULT_RENDER_ORDER = ["mount", "pet", "cape", "body", "skin", "hair", "armor", "hat", "helmet", "weapon", "shield", "aura"];
 const DEFAULT_ATTACK_SPEC = {
   shape: "rectangle",
-  range: 78,
+  range: 39,
   halfWidth: 18,
 };
 const CHARACTER_ANIMS = {
@@ -47,15 +63,18 @@ const CHARACTER_ANIMS = {
   walk: 8,
   attack: 6,
 };
-const CHARACTER_LAYERS = {
-  body: ["human"],
-  armor: ["leather", "iron", "dark"],
-  helmet: ["ironCap", "horned", "hood"],
-  weapon: ["sword", "axe", "staff"],
-  shield: ["round", "tower"],
-  cape: ["red", "blue", "green"],
-  mount: ["horseBrown", "horseGrey"],
+const DEFAULT_MONSTER_CATALOG = {
+  frameWidth: CHARACTER_FRAME,
+  frameHeight: CHARACTER_FRAME,
+  animations: CHARACTER_ANIMS,
+  monsters: [],
 };
+let characterCatalog = null;
+let monsterCatalog = null;
+let previewMode = "idle";
+let previewFrame = 0;
+let previewTimer = null;
+let game = null;
 
 let ws = null;
 let selfId = null;
@@ -110,14 +129,24 @@ class LegacyScene extends Phaser.Scene {
     this.load.spritesheet("orc-idle", "assets/characters/orc-idle.png", { frameWidth: 100, frameHeight: 100 });
     this.load.spritesheet("orc-walk", "assets/characters/orc-walk.png", { frameWidth: 100, frameHeight: 100 });
     this.load.spritesheet("orc-attack", "assets/characters/orc-attack.png", { frameWidth: 100, frameHeight: 100 });
-    for (const [layer, variants] of Object.entries(CHARACTER_LAYERS)) {
-      for (const variant of variants) {
-        for (const anim of Object.keys(CHARACTER_ANIMS)) {
-          this.load.spritesheet(characterSheetKey(layer, variant, anim), `assets/generated-characters/${layer}-${variant}-${anim}.png`, {
-            frameWidth: CHARACTER_FRAME,
-            frameHeight: CHARACTER_FRAME,
-          });
-        }
+    for (const monster of monsterCatalogItems()) {
+      for (const anim of Object.keys(CHARACTER_ANIMS)) {
+        const path = monster.spritesheets?.[anim];
+        if (!path) continue;
+        this.load.spritesheet(monsterSheetKey(monster.id, anim), path, {
+          frameWidth: CHARACTER_FRAME,
+          frameHeight: CHARACTER_FRAME,
+        });
+      }
+    }
+    for (const item of catalogSpriteItems()) {
+      for (const anim of Object.keys(CHARACTER_ANIMS)) {
+        const path = item.spritesheets?.[anim];
+        if (!path) continue;
+        this.load.spritesheet(characterSheetKey(item.slot, item.id, anim), path, {
+          frameWidth: CHARACTER_FRAME,
+          frameHeight: CHARACTER_FRAME,
+        });
       }
     }
   }
@@ -192,18 +221,30 @@ class LegacyScene extends Phaser.Scene {
         repeat: -1,
       });
     }
-    for (const [layer, variants] of Object.entries(CHARACTER_LAYERS)) {
-      for (const variant of variants) {
-        for (const [anim, frames] of Object.entries(CHARACTER_ANIMS)) {
-          const key = characterAnimKey(layer, variant, anim);
-          if (this.anims.exists(key)) continue;
-          this.anims.create({
-            key,
-            frames: this.anims.generateFrameNumbers(characterSheetKey(layer, variant, anim), { start: 0, end: frames - 1 }),
-            frameRate: anim === "walk" ? 10 : anim === "attack" ? 12 : 6,
-            repeat: -1,
-          });
-        }
+    for (const monster of monsterCatalogItems()) {
+      for (const [anim, frames] of Object.entries(CHARACTER_ANIMS)) {
+        if (!monster.spritesheets?.[anim]) continue;
+        const key = monsterAnimKey(monster.id, anim);
+        if (this.anims.exists(key)) continue;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(monsterSheetKey(monster.id, anim), { start: 0, end: frames - 1 }),
+          frameRate: anim === "walk" ? 10 : anim === "attack" ? 12 : 6,
+          repeat: -1,
+        });
+      }
+    }
+    for (const item of catalogSpriteItems()) {
+      for (const [anim, frames] of Object.entries(CHARACTER_ANIMS)) {
+        if (!item.spritesheets?.[anim]) continue;
+        const key = characterAnimKey(item.slot, item.id, anim);
+        if (this.anims.exists(key)) continue;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(characterSheetKey(item.slot, item.id, anim), { start: 0, end: frames - 1 }),
+          frameRate: anim === "walk" ? 10 : anim === "attack" ? 12 : 6,
+          repeat: -1,
+        });
       }
     }
   }
@@ -588,7 +629,7 @@ class LegacyScene extends Phaser.Scene {
       if (!object) {
         object = {
           tile: this.add.rectangle(tileX, tileY, TILE, TILE).setOrigin(0).setStrokeStyle(2, 0xc7a5ff, 0.95).setDepth(8),
-          text: this.add.text(tileX + TILE / 2, tileY - 8, portal.label, { fontFamily: "system-ui", fontSize: "12px", color: "#ece7dc" }).setOrigin(0.5, 1).setDepth(20),
+          text: this.add.text(tileX + TILE / 2, tileY - 8, portal.label, { fontFamily: UI_FONT, fontSize: "12px", color: "#ece7dc" }).setOrigin(0.5, 1).setDepth(20),
         };
         this.portalObjects.set(key, object);
       }
@@ -657,27 +698,22 @@ class LegacyScene extends Phaser.Scene {
   ensureCharacter(collection, id, player) {
     let entity = collection.get(id);
     if (entity) return entity;
-    const sprite = this.add.sprite(0, 0, player ? "px-body-human-idle" : "orc-idle").setDepth(player ? 14 : 12).setScale(player ? CHARACTER_SCALE : 1.68);
+    const sprite = this.add.sprite(0, 0, player ? "px-body-human-idle" : "orc-idle").setDepth(player ? 14 : 12).setScale(player ? CHARACTER_SCALE : ENEMY_SCALE);
     const layers = player ? this.createPaperDollLayers() : null;
     const attackZone = player ? this.add.graphics().setDepth(13).setVisible(false) : null;
-    const name = this.add.text(0, -62, "", { fontFamily: "system-ui", fontSize: "12px", color: "#f0d27b" }).setOrigin(0.5).setDepth(20);
+    const focusRing = player ? this.add.graphics().setDepth(13).setVisible(false) : null;
+    const name = this.add.text(0, -62, "", { fontFamily: UI_FONT, fontSize: "12px", color: "#f0d27b" }).setOrigin(0.5).setDepth(20);
     const barBg = this.add.rectangle(0, -52, 38, 4, 0x171111, 1).setDepth(20);
     const bar = this.add.rectangle(-19, -52, 38, 4, 0xc35b5b, 1).setOrigin(0, 0.5).setDepth(20);
-    entity = { sprite, layers, attackZone, name, barBg, bar, x: 0, y: 0, initialized: false, player };
+    entity = { sprite, layers, attackZone, focusRing, name, barBg, bar, x: 0, y: 0, initialized: false, player };
     collection.set(id, entity);
     return entity;
   }
 
   createPaperDollLayers() {
     const makeLayer = (depth) => this.add.sprite(0, 0, "px-body-human-idle").setDepth(depth).setScale(CHARACTER_SCALE).setVisible(false);
-    return {
-      mount: makeLayer(9),
-      cape: makeLayer(11),
-      armor: makeLayer(15),
-      helmet: makeLayer(16),
-      weapon: makeLayer(17),
-      shield: makeLayer(18),
-    };
+    const depths = { mount: 9, pet: 10, cape: 11, skin: 15, hair: 16, armor: 17, hat: 18, helmet: 19, weapon: 20, shield: 21, aura: 22 };
+    return Object.fromEntries(catalogRenderOrder().filter((slot) => slot !== "body").map((slot) => [slot, makeLayer(depths[slot] || 15)]));
   }
 
   updateCharacterEntity(entity, source, self) {
@@ -693,17 +729,27 @@ class LegacyScene extends Phaser.Scene {
     const mounted = entity.player && appearance.mount !== "none";
     const visualY = entity.y;
     const action = source.attackCd > 0.12 ? "attack" : source.moving ? "walk" : "idle";
-    const texturePrefix = entity.player ? "soldier" : "orc";
-    const anim = entity.player ? characterAnimKey("body", "human", action) : `${texturePrefix}-${action}`;
+    const body = appearance.body || catalogSlotDefault("body");
+    const monsterKind = entity.player ? null : normalizeMonsterKind(source.kind);
+    const monsterAnim = monsterKind ? monsterAnimKey(monsterKind, action) : null;
+    const anim = entity.player ? characterAnimKey("body", body, action) : monsterAnim && this.anims.exists(monsterAnim) ? monsterAnim : `orc-${action}`;
     entity.sprite.setPosition(entity.x, visualY).setFlipX(source.facing < 0).play(anim, true);
     if (entity.player) {
+      if (mounted) {
+        entity.sprite.setCrop(0, 0, CHARACTER_FRAME, MOUNTED_BODY_VISIBLE_HEIGHT);
+      } else {
+        entity.sprite.setCrop(0, 0, CHARACTER_FRAME, CHARACTER_FRAME);
+      }
+    }
+    if (entity.player) {
+      this.updateFocusRing(entity, self);
       this.updateAttackZone(entity, source, self);
       this.updatePaperDollLayers(entity, appearance, source, visualY, action);
     }
-    entity.name.setPosition(entity.x, entity.y - (mounted ? 64 : 48)).setText(entity.player ? (self ? "You" : `${source.name} ${source.house}`) : "");
+    entity.name.setPosition(entity.x, entity.y - (mounted ? 44 : 34)).setText(entity.player ? (self ? "You" : `${source.name} ${source.house}`) : "");
     entity.name.setColor(self ? "#f0d27b" : "#c8d7f0");
-    entity.barBg.setPosition(entity.x, entity.y - (mounted ? 54 : 38));
-    entity.bar.setPosition(entity.x - 19, entity.y - (mounted ? 54 : 38)).setSize(38 * Phaser.Math.Clamp(source.hp / source.maxHp, 0, 1), 4);
+    entity.barBg.setPosition(entity.x, entity.y - (mounted ? 36 : 26));
+    entity.bar.setPosition(entity.x - 19, entity.y - (mounted ? 36 : 26)).setSize(38 * Phaser.Math.Clamp(source.hp / source.maxHp, 0, 1), 4);
   }
 
   updateAttackZone(entity, source, self) {
@@ -725,18 +771,35 @@ class LegacyScene extends Phaser.Scene {
     }
   }
 
+  updateFocusRing(entity, self) {
+    const graphics = entity.focusRing;
+    if (!graphics) return;
+    graphics.clear();
+    graphics.setVisible(self);
+    if (!self) return;
+    graphics
+      .fillStyle(0x171111, 0.32)
+      .fillEllipse(entity.x, entity.y + 10, 24, 9)
+      .lineStyle(2, 0xf0d27b, 0.72)
+      .strokeEllipse(entity.x, entity.y + 10, 26, 10);
+  }
+
   updatePaperDollLayers(entity, appearance, source, visualY, action) {
     const layers = entity.layers;
-    this.updatePixelLayer(layers.mount, "mount", appearance.mount, action, entity.x, visualY, source.facing);
-    this.updatePixelLayer(layers.cape, "cape", appearance.cape, action, entity.x, visualY, source.facing);
-    this.updatePixelLayer(layers.armor, "armor", appearance.armor, action, entity.x, visualY, source.facing);
-    this.updatePixelLayer(layers.helmet, "helmet", appearance.helmet, action, entity.x, visualY, source.facing);
-    this.updatePixelLayer(layers.weapon, "weapon", appearance.weapon, action, entity.x, visualY, source.facing);
-    this.updatePixelLayer(layers.shield, "shield", appearance.shield, action, entity.x, visualY, source.facing);
+    for (const slot of catalogRenderOrder()) {
+      if (slot === "body") continue;
+      const visibleVariant = slot === "hat" && appearance.helmet !== "none" ? "none" : appearance[slot];
+      this.updatePixelLayer(layers[slot], slot, visibleVariant, action, entity.x, visualY, source.facing);
+    }
   }
 
   updatePixelLayer(sprite, layer, variant, action, x, y, facing) {
-    if (!variant || variant === "none") {
+    if (!sprite || !variant || variant === "none") {
+      sprite.setVisible(false);
+      return;
+    }
+    const animKey = characterAnimKey(layer, variant, action);
+    if (!this.anims.exists(animKey)) {
       sprite.setVisible(false);
       return;
     }
@@ -744,7 +807,7 @@ class LegacyScene extends Phaser.Scene {
       .setVisible(true)
       .setPosition(x, y)
       .setFlipX(facing < 0)
-      .play(characterAnimKey(layer, variant, action), true);
+      .play(animKey, true);
   }
 
   updateLoot() {
@@ -773,7 +836,7 @@ class LegacyScene extends Phaser.Scene {
       let text = this.damageTextEntities.get(item.id);
       if (!text) {
         text = this.add.text(item.x, item.y, String(item.value), {
-          fontFamily: "system-ui",
+          fontFamily: UI_FONT,
           fontSize: "16px",
           fontStyle: "800",
           color: "#f8e38a",
@@ -812,6 +875,7 @@ class LegacyScene extends Phaser.Scene {
   destroyEntity(entity) {
     entity.sprite.destroy();
     entity.attackZone?.destroy();
+    entity.focusRing?.destroy();
     entity.name.destroy();
     entity.barBg.destroy();
     entity.bar.destroy();
@@ -863,7 +927,7 @@ class LegacyScene extends Phaser.Scene {
   drawStatusOverlay() {
     if (!hasStarted || this.statusText) return;
     this.statusText = this.add.text(30, 40, statusText === "online" ? "Waiting for the world..." : "Server offline", {
-      fontFamily: "system-ui",
+      fontFamily: UI_FONT,
       fontSize: "16px",
       color: "#d4c497",
     }).setScrollFactor(0).setDepth(100);
@@ -892,7 +956,28 @@ const config = {
   scene: [LegacyScene],
 };
 
-const game = new Phaser.Game(config);
+async function boot() {
+  try {
+    const response = await fetch(CATALOG_URL);
+    if (!response.ok) throw new Error(`Unable to load ${CATALOG_URL}`);
+    characterCatalog = await response.json();
+  } catch (error) {
+    console.warn(error);
+    characterCatalog = fallbackCharacterCatalog();
+  }
+  try {
+    const response = await fetch(MONSTER_CATALOG_URL);
+    if (!response.ok) throw new Error(`Unable to load ${MONSTER_CATALOG_URL}`);
+    monsterCatalog = await response.json();
+  } catch (error) {
+    console.warn(error);
+    monsterCatalog = DEFAULT_MONSTER_CATALOG;
+  }
+  setupAppearanceCreator();
+  game = new Phaser.Game(config);
+  setupMobileControls();
+  updateSidebar();
+}
 
 function connect(name, house, appearance) {
   statusText = "connecting";
@@ -949,6 +1034,136 @@ function connect(name, house, appearance) {
     statusText = "offline";
     pushLog("Connection lost. Reload the page or restart the server.");
   });
+}
+
+function setupAppearanceCreator() {
+  buildHiddenSelects();
+  buildAppearanceTabs();
+  bindPreviewModeTabs();
+  startPreviewAnimation();
+}
+
+function buildHiddenSelects() {
+  for (const slot of catalogRenderOrder()) {
+    const select = ui[`${slot}Select`];
+    if (!select) continue;
+    select.innerHTML = "";
+    for (const item of catalogSlot(slot).items) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      select.append(option);
+    }
+    select.value = catalogSlotDefault(slot);
+  }
+}
+
+function buildAppearanceTabs() {
+  if (!ui.appearanceTabs || !ui.appearanceOptions) return;
+  const groups = [
+    { id: "body", label: "Body", slots: ["skin", "hair"] },
+    { id: "gear", label: "Gear", slots: ["armor", "helmet", "weapon", "shield"] },
+    { id: "cosmetics", label: "Cosmetics", slots: ["hat", "cape", "aura", "pet"] },
+    { id: "mount", label: "Mount", slots: ["mount"] },
+  ];
+  ui.appearanceTabs.innerHTML = "";
+  for (const group of groups) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = group.label;
+    button.dataset.group = group.id;
+    button.addEventListener("click", () => renderAppearanceGroup(group, groups));
+    ui.appearanceTabs.append(button);
+  }
+  renderAppearanceGroup(groups[0], groups);
+  refreshCreatorPreview();
+}
+
+function renderAppearanceGroup(group, groups) {
+  for (const button of ui.appearanceTabs.querySelectorAll("button")) button.classList.toggle("is-active", button.dataset.group === group.id);
+  ui.appearanceOptions.innerHTML = "";
+  for (const slot of group.slots) {
+    const slotData = catalogSlot(slot);
+    if (!slotData.items.length) continue;
+    for (const item of slotData.items) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "cosmetic-card";
+      card.dataset.slot = slot;
+      card.dataset.value = item.id;
+      card.dataset.rarity = item.rarity || "common";
+      card.innerHTML = `<strong>${item.label}</strong><span>${slotData.label} · ${item.rarity || "common"}</span>`;
+      card.addEventListener("click", () => {
+        const select = ui[`${slot}Select`];
+        if (select) select.value = item.id;
+        if (slot === "helmet" && item.id !== "none" && ui.hatSelect) ui.hatSelect.value = "none";
+        refreshAppearanceCards();
+        refreshCreatorPreview();
+      });
+      ui.appearanceOptions.append(card);
+    }
+  }
+  refreshAppearanceCards();
+}
+
+function refreshAppearanceCards() {
+  for (const card of ui.appearanceOptions?.querySelectorAll(".cosmetic-card") || []) {
+    const select = ui[`${card.dataset.slot}Select`];
+    card.classList.toggle("is-selected", select?.value === card.dataset.value);
+  }
+}
+
+function bindPreviewModeTabs() {
+  for (const button of ui.previewModeTabs?.querySelectorAll("button") || []) {
+    button.addEventListener("click", () => {
+      previewMode = button.dataset.previewMode || "idle";
+      previewFrame = 0;
+      for (const item of ui.previewModeTabs.querySelectorAll("button")) item.classList.toggle("is-active", item === button);
+      refreshCreatorPreview();
+    });
+  }
+}
+
+function startPreviewAnimation() {
+  if (previewTimer) clearInterval(previewTimer);
+  previewTimer = setInterval(() => {
+    previewFrame = (previewFrame + 1) % (CHARACTER_ANIMS[previewMode] || 1);
+    refreshCreatorPreview();
+  }, 150);
+}
+
+function refreshCreatorPreview() {
+  if (!ui.creatorPreviewStage) return;
+  const appearance = normalizeAppearance(getSelectedAppearance());
+  ui.creatorPreviewStage.innerHTML = "";
+  for (const slot of catalogRenderOrder()) {
+    const variant = slot === "hat" && appearance.helmet !== "none" ? "none" : appearance[slot];
+    if (!variant || variant === "none") continue;
+    const item = catalogSlot(slot).items.find((candidate) => candidate.id === variant);
+    const src = item?.spritesheets?.[previewMode];
+    if (!src) continue;
+    const layer = document.createElement("div");
+    const frames = CHARACTER_ANIMS[previewMode] || 1;
+    layer.className = "preview-layer";
+    if (slot === "body" && appearance.mount !== "none") layer.classList.add("is-mounted-body");
+    layer.style.backgroundImage = `url("${src}")`;
+    layer.style.backgroundSize = `${frames * 200}px 200px`;
+    layer.style.backgroundPosition = `${-previewFrame * 200}px 0`;
+    ui.creatorPreviewStage.append(layer);
+  }
+}
+
+function fallbackCharacterCatalog() {
+  return {
+    frameWidth: CHARACTER_FRAME,
+    frameHeight: CHARACTER_FRAME,
+    animations: CHARACTER_ANIMS,
+    renderOrder: DEFAULT_RENDER_ORDER,
+    slots: {
+      body: { label: "Body", default: "human", items: [{ id: "human", label: "Human", rarity: "common", spritesheets: { idle: "assets/generated-characters/body-human-idle.png", walk: "assets/generated-characters/body-human-walk.png", attack: "assets/generated-characters/body-human-attack.png" } }] },
+      armor: { label: "Armor", default: "leather", items: [{ id: "none", label: "None", rarity: "common", spritesheets: {} }, { id: "leather", label: "Leather", rarity: "common", spritesheets: { idle: "assets/generated-characters/armor-leather-idle.png", walk: "assets/generated-characters/armor-leather-walk.png", attack: "assets/generated-characters/armor-leather-attack.png" } }] },
+    },
+  };
 }
 
 function getSelf() {
@@ -1017,6 +1232,22 @@ function characterAnimKey(layer, variant, anim) {
   return `${characterSheetKey(layer, variant, anim)}-anim`;
 }
 
+function monsterSheetKey(kind, anim) {
+  return `monster-${kind}-${anim}`;
+}
+
+function monsterAnimKey(kind, anim) {
+  return `${monsterSheetKey(kind, anim)}-anim`;
+}
+
+function monsterCatalogItems() {
+  return Array.isArray(monsterCatalog?.monsters) ? monsterCatalog.monsters : [];
+}
+
+function normalizeMonsterKind(value) {
+  return monsterCatalogItems().some((monster) => monster.id === value) ? value : null;
+}
+
 function normalizeAttackSpec(value) {
   const source = value && typeof value === "object" ? value : {};
   return {
@@ -1056,15 +1287,7 @@ function drawAttackRectangle(graphics, x, y, angle, range, halfWidth, alpha) {
 
 function normalizeAppearance(value) {
   const source = value && typeof value === "object" ? value : {};
-  return {
-    body: source.body || "soldier",
-    armor: source.armor || "leather",
-    helmet: source.helmet || "ironCap",
-    weapon: source.weapon || "sword",
-    shield: source.shield || "round",
-    cape: source.cape || "red",
-    mount: source.mount || "none",
-  };
+  return Object.fromEntries(catalogRenderOrder().map((slot) => [slot, catalogAllows(slot, source[slot]) ? source[slot] : catalogSlotDefault(slot)]));
 }
 
 function getAppearanceColors(appearance) {
@@ -1113,15 +1336,28 @@ function getAppearanceColors(appearance) {
 }
 
 function getSelectedAppearance() {
-  return {
-    body: "soldier",
-    armor: ui.armorSelect?.value || "leather",
-    helmet: ui.helmetSelect?.value || "ironCap",
-    weapon: ui.weaponSelect?.value || "sword",
-    shield: ui.shieldSelect?.value || "round",
-    cape: ui.capeSelect?.value || "red",
-    mount: ui.mountSelect?.value || "none",
-  };
+  return Object.fromEntries(catalogRenderOrder().map((slot) => [slot, ui[`${slot}Select`]?.value || catalogSlotDefault(slot)]));
+}
+
+function catalogRenderOrder() {
+  return characterCatalog?.renderOrder || DEFAULT_RENDER_ORDER;
+}
+
+function catalogSlot(slot) {
+  return characterCatalog?.slots?.[slot] || { label: slot, default: slot === "body" ? "human" : "none", items: [{ id: "none", label: "None", rarity: "common", spritesheets: {} }] };
+}
+
+function catalogSlotDefault(slot) {
+  const defaultValue = catalogSlot(slot).default;
+  return defaultValue || (slot === "body" ? "human" : "none");
+}
+
+function catalogAllows(slot, value) {
+  return catalogSlot(slot).items.some((item) => item.id === value);
+}
+
+function catalogSpriteItems() {
+  return catalogRenderOrder().flatMap((slot) => catalogSlot(slot).items.filter((item) => item.id !== "none" && item.spritesheets).map((item) => ({ ...item, slot })));
 }
 
 function setupMobileControls() {
@@ -1272,5 +1508,4 @@ ui.newHeirButton.addEventListener("click", () => {
 });
 
 window.addEventListener("resize", () => gameScene?.resize());
-setupMobileControls();
-updateSidebar();
+boot();

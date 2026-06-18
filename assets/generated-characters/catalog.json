@@ -6,12 +6,541 @@
     "walk": 8,
     "attack": 6
   },
+  "renderOrder": [
+    "mount",
+    "pet",
+    "cape",
+    "body",
+    "skin",
+    "hair",
+    "armor",
+    "hat",
+    "helmet",
+    "weapon",
+    "shield",
+    "aura"
+  ],
+  "slots": {
+    "mount": {
+      "label": "Mount",
+      "default": "none",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "horseBrown",
+          "label": "Brown horse",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/mount-horseBrown-idle.png",
+            "walk": "assets/generated-characters/mount-horseBrown-walk.png",
+            "attack": "assets/generated-characters/mount-horseBrown-attack.png"
+          }
+        },
+        {
+          "id": "horseGrey",
+          "label": "Grey horse",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/mount-horseGrey-idle.png",
+            "walk": "assets/generated-characters/mount-horseGrey-walk.png",
+            "attack": "assets/generated-characters/mount-horseGrey-attack.png"
+          }
+        },
+        {
+          "id": "blackHorse",
+          "label": "Black horse",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/mount-blackHorse-idle.png",
+            "walk": "assets/generated-characters/mount-blackHorse-walk.png",
+            "attack": "assets/generated-characters/mount-blackHorse-attack.png"
+          }
+        },
+        {
+          "id": "emberStag",
+          "label": "Ember stag",
+          "rarity": "epic",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/mount-emberStag-idle.png",
+            "walk": "assets/generated-characters/mount-emberStag-walk.png",
+            "attack": "assets/generated-characters/mount-emberStag-attack.png"
+          }
+        }
+      ]
+    },
+    "pet": {
+      "label": "Pet",
+      "default": "none",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        }
+      ]
+    },
+    "cape": {
+      "label": "Cape",
+      "default": "red",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "red",
+          "label": "Red cape",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/cape-red-idle.png",
+            "walk": "assets/generated-characters/cape-red-walk.png",
+            "attack": "assets/generated-characters/cape-red-attack.png"
+          }
+        },
+        {
+          "id": "blue",
+          "label": "Blue cape",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/cape-blue-idle.png",
+            "walk": "assets/generated-characters/cape-blue-walk.png",
+            "attack": "assets/generated-characters/cape-blue-attack.png"
+          }
+        },
+        {
+          "id": "green",
+          "label": "Green cape",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/cape-green-idle.png",
+            "walk": "assets/generated-characters/cape-green-walk.png",
+            "attack": "assets/generated-characters/cape-green-attack.png"
+          }
+        },
+        {
+          "id": "tornBlack",
+          "label": "Torn black cape",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/cape-tornBlack-idle.png",
+            "walk": "assets/generated-characters/cape-tornBlack-walk.png",
+            "attack": "assets/generated-characters/cape-tornBlack-attack.png"
+          }
+        }
+      ]
+    },
+    "body": {
+      "label": "Body",
+      "default": "human",
+      "items": [
+        {
+          "id": "human",
+          "label": "Human adventurer",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/body-human-idle.png",
+            "walk": "assets/generated-characters/body-human-walk.png",
+            "attack": "assets/generated-characters/body-human-attack.png"
+          }
+        }
+      ]
+    },
+    "skin": {
+      "label": "Skin",
+      "default": "pale",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "pale",
+          "label": "Pale skin",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/skin-pale-idle.png",
+            "walk": "assets/generated-characters/skin-pale-walk.png",
+            "attack": "assets/generated-characters/skin-pale-attack.png"
+          }
+        },
+        {
+          "id": "tan",
+          "label": "Tan skin",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/skin-tan-idle.png",
+            "walk": "assets/generated-characters/skin-tan-walk.png",
+            "attack": "assets/generated-characters/skin-tan-attack.png"
+          }
+        },
+        {
+          "id": "dark",
+          "label": "Dark skin",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/skin-dark-idle.png",
+            "walk": "assets/generated-characters/skin-dark-walk.png",
+            "attack": "assets/generated-characters/skin-dark-attack.png"
+          }
+        }
+      ]
+    },
+    "hair": {
+      "label": "Hair",
+      "default": "short",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "short",
+          "label": "Short hair",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hair-short-idle.png",
+            "walk": "assets/generated-characters/hair-short-walk.png",
+            "attack": "assets/generated-characters/hair-short-attack.png"
+          }
+        },
+        {
+          "id": "long",
+          "label": "Long hair",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hair-long-idle.png",
+            "walk": "assets/generated-characters/hair-long-walk.png",
+            "attack": "assets/generated-characters/hair-long-attack.png"
+          }
+        },
+        {
+          "id": "wild",
+          "label": "Wild hair",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hair-wild-idle.png",
+            "walk": "assets/generated-characters/hair-wild-walk.png",
+            "attack": "assets/generated-characters/hair-wild-attack.png"
+          }
+        }
+      ]
+    },
+    "armor": {
+      "label": "Armor",
+      "default": "leather",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "leather",
+          "label": "Leather armor",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/armor-leather-idle.png",
+            "walk": "assets/generated-characters/armor-leather-walk.png",
+            "attack": "assets/generated-characters/armor-leather-attack.png"
+          }
+        },
+        {
+          "id": "iron",
+          "label": "Iron armor",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/armor-iron-idle.png",
+            "walk": "assets/generated-characters/armor-iron-walk.png",
+            "attack": "assets/generated-characters/armor-iron-attack.png"
+          }
+        },
+        {
+          "id": "dark",
+          "label": "Dark armor",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/armor-dark-idle.png",
+            "walk": "assets/generated-characters/armor-dark-walk.png",
+            "attack": "assets/generated-characters/armor-dark-attack.png"
+          }
+        }
+      ]
+    },
+    "hat": {
+      "label": "Hat",
+      "default": "travelerHat",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "travelerHat",
+          "label": "Traveler hat",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hat-travelerHat-idle.png",
+            "walk": "assets/generated-characters/hat-travelerHat-walk.png",
+            "attack": "assets/generated-characters/hat-travelerHat-attack.png"
+          }
+        },
+        {
+          "id": "witchHat",
+          "label": "Witch hat",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hat-witchHat-idle.png",
+            "walk": "assets/generated-characters/hat-witchHat-walk.png",
+            "attack": "assets/generated-characters/hat-witchHat-attack.png"
+          }
+        },
+        {
+          "id": "crown",
+          "label": "Old crown",
+          "rarity": "epic",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hat-crown-idle.png",
+            "walk": "assets/generated-characters/hat-crown-walk.png",
+            "attack": "assets/generated-characters/hat-crown-attack.png"
+          }
+        },
+        {
+          "id": "christmasHat",
+          "label": "Christmas hat",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/hat-christmasHat-idle.png",
+            "walk": "assets/generated-characters/hat-christmasHat-walk.png",
+            "attack": "assets/generated-characters/hat-christmasHat-attack.png"
+          }
+        }
+      ]
+    },
+    "helmet": {
+      "label": "Helmet",
+      "default": "none",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "ironCap",
+          "label": "Iron cap",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/helmet-ironCap-idle.png",
+            "walk": "assets/generated-characters/helmet-ironCap-walk.png",
+            "attack": "assets/generated-characters/helmet-ironCap-attack.png"
+          }
+        },
+        {
+          "id": "horned",
+          "label": "Horned helm",
+          "rarity": "rare",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/helmet-horned-idle.png",
+            "walk": "assets/generated-characters/helmet-horned-walk.png",
+            "attack": "assets/generated-characters/helmet-horned-attack.png"
+          }
+        },
+        {
+          "id": "hood",
+          "label": "Hunter hood",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/helmet-hood-idle.png",
+            "walk": "assets/generated-characters/helmet-hood-walk.png",
+            "attack": "assets/generated-characters/helmet-hood-attack.png"
+          }
+        }
+      ]
+    },
+    "weapon": {
+      "label": "Weapon",
+      "default": "sword",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "sword",
+          "label": "Sword",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/weapon-sword-idle.png",
+            "walk": "assets/generated-characters/weapon-sword-walk.png",
+            "attack": "assets/generated-characters/weapon-sword-attack.png"
+          }
+        },
+        {
+          "id": "axe",
+          "label": "Axe",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/weapon-axe-idle.png",
+            "walk": "assets/generated-characters/weapon-axe-walk.png",
+            "attack": "assets/generated-characters/weapon-axe-attack.png"
+          }
+        },
+        {
+          "id": "staff",
+          "label": "Staff",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/weapon-staff-idle.png",
+            "walk": "assets/generated-characters/weapon-staff-walk.png",
+            "attack": "assets/generated-characters/weapon-staff-attack.png"
+          }
+        }
+      ]
+    },
+    "shield": {
+      "label": "Shield",
+      "default": "round",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        },
+        {
+          "id": "round",
+          "label": "Round shield",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/shield-round-idle.png",
+            "walk": "assets/generated-characters/shield-round-walk.png",
+            "attack": "assets/generated-characters/shield-round-attack.png"
+          }
+        },
+        {
+          "id": "tower",
+          "label": "Tower shield",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {
+            "idle": "assets/generated-characters/shield-tower-idle.png",
+            "walk": "assets/generated-characters/shield-tower-walk.png",
+            "attack": "assets/generated-characters/shield-tower-attack.png"
+          }
+        }
+      ]
+    },
+    "aura": {
+      "label": "Aura",
+      "default": "none",
+      "items": [
+        {
+          "id": "none",
+          "label": "None",
+          "rarity": "common",
+          "defaultUnlocked": true,
+          "spritesheets": {}
+        }
+      ]
+    }
+  },
   "layers": {
     "body": {
       "human": {
         "idle": "assets/generated-characters/body-human-idle.png",
         "walk": "assets/generated-characters/body-human-walk.png",
         "attack": "assets/generated-characters/body-human-attack.png"
+      }
+    },
+    "skin": {
+      "pale": {
+        "idle": "assets/generated-characters/skin-pale-idle.png",
+        "walk": "assets/generated-characters/skin-pale-walk.png",
+        "attack": "assets/generated-characters/skin-pale-attack.png"
+      },
+      "tan": {
+        "idle": "assets/generated-characters/skin-tan-idle.png",
+        "walk": "assets/generated-characters/skin-tan-walk.png",
+        "attack": "assets/generated-characters/skin-tan-attack.png"
+      },
+      "dark": {
+        "idle": "assets/generated-characters/skin-dark-idle.png",
+        "walk": "assets/generated-characters/skin-dark-walk.png",
+        "attack": "assets/generated-characters/skin-dark-attack.png"
+      }
+    },
+    "hair": {
+      "short": {
+        "idle": "assets/generated-characters/hair-short-idle.png",
+        "walk": "assets/generated-characters/hair-short-walk.png",
+        "attack": "assets/generated-characters/hair-short-attack.png"
+      },
+      "long": {
+        "idle": "assets/generated-characters/hair-long-idle.png",
+        "walk": "assets/generated-characters/hair-long-walk.png",
+        "attack": "assets/generated-characters/hair-long-attack.png"
+      },
+      "wild": {
+        "idle": "assets/generated-characters/hair-wild-idle.png",
+        "walk": "assets/generated-characters/hair-wild-walk.png",
+        "attack": "assets/generated-characters/hair-wild-attack.png"
       }
     },
     "armor": {
@@ -46,6 +575,28 @@
         "idle": "assets/generated-characters/helmet-hood-idle.png",
         "walk": "assets/generated-characters/helmet-hood-walk.png",
         "attack": "assets/generated-characters/helmet-hood-attack.png"
+      }
+    },
+    "hat": {
+      "travelerHat": {
+        "idle": "assets/generated-characters/hat-travelerHat-idle.png",
+        "walk": "assets/generated-characters/hat-travelerHat-walk.png",
+        "attack": "assets/generated-characters/hat-travelerHat-attack.png"
+      },
+      "witchHat": {
+        "idle": "assets/generated-characters/hat-witchHat-idle.png",
+        "walk": "assets/generated-characters/hat-witchHat-walk.png",
+        "attack": "assets/generated-characters/hat-witchHat-attack.png"
+      },
+      "crown": {
+        "idle": "assets/generated-characters/hat-crown-idle.png",
+        "walk": "assets/generated-characters/hat-crown-walk.png",
+        "attack": "assets/generated-characters/hat-crown-attack.png"
+      },
+      "christmasHat": {
+        "idle": "assets/generated-characters/hat-christmasHat-idle.png",
+        "walk": "assets/generated-characters/hat-christmasHat-walk.png",
+        "attack": "assets/generated-characters/hat-christmasHat-attack.png"
       }
     },
     "weapon": {
@@ -92,6 +643,11 @@
         "idle": "assets/generated-characters/cape-green-idle.png",
         "walk": "assets/generated-characters/cape-green-walk.png",
         "attack": "assets/generated-characters/cape-green-attack.png"
+      },
+      "tornBlack": {
+        "idle": "assets/generated-characters/cape-tornBlack-idle.png",
+        "walk": "assets/generated-characters/cape-tornBlack-walk.png",
+        "attack": "assets/generated-characters/cape-tornBlack-attack.png"
       }
     },
     "mount": {
@@ -104,6 +660,16 @@
         "idle": "assets/generated-characters/mount-horseGrey-idle.png",
         "walk": "assets/generated-characters/mount-horseGrey-walk.png",
         "attack": "assets/generated-characters/mount-horseGrey-attack.png"
+      },
+      "blackHorse": {
+        "idle": "assets/generated-characters/mount-blackHorse-idle.png",
+        "walk": "assets/generated-characters/mount-blackHorse-walk.png",
+        "attack": "assets/generated-characters/mount-blackHorse-attack.png"
+      },
+      "emberStag": {
+        "idle": "assets/generated-characters/mount-emberStag-idle.png",
+        "walk": "assets/generated-characters/mount-emberStag-walk.png",
+        "attack": "assets/generated-characters/mount-emberStag-attack.png"
       }
     }
   }

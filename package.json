@@ -8,8 +8,11 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check src/game.js",
-    "generate:characters": "node tools/generate-pixel-characters.js"
+    "check": "node --check server.js && node --check src/game.js && node --check tools/generate-pixel-characters.js && node --check tools/verify-character-assets.js && node --check tools/generate-pixel-monsters.js && node --check tools/verify-monster-assets.js && node tools/verify-character-assets.js && node tools/verify-monster-assets.js",
+    "generate:characters": "node tools/generate-pixel-characters.js",
+    "generate:monsters": "node tools/generate-pixel-monsters.js",
+    "verify:characters": "node tools/verify-character-assets.js",
+    "verify:monsters": "node tools/verify-monster-assets.js"
   },
   "keywords": [],
   "author": "",

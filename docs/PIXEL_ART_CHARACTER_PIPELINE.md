@@ -8,8 +8,11 @@ Legacy should stay pixel art. The target is not realism. The target is a beautif
 
 The character system should support:
 - Base body.
+- Skin tone.
+- Hair.
 - Visible armor.
 - Visible helmet.
+- Hats and cosmetics.
 - Visible weapon.
 - Visible shield.
 - Visible cape.
@@ -49,8 +52,11 @@ Every layer must line up perfectly with the same invisible base character.
 
 Layer examples:
 - `body-human-idle.png`
+- `skin-pale-idle.png`
+- `hair-short-idle.png`
 - `armor-iron-idle.png`
 - `helmet-iron-cap-idle.png`
+- `hat-witchHat-idle.png`
 - `weapon-sword-idle.png`
 - `shield-round-idle.png`
 - `cape-red-idle.png`
@@ -80,11 +86,32 @@ Avoid:
 
 1. Run `npm run generate:characters`.
 2. The generator writes aligned PNG spritesheets into `assets/generated-characters`.
-3. Phaser loads the generated body, armor, helmet, cape, weapon, shield, and mount layers.
-4. Test in Phaser.
-5. Improve the drawing functions in `tools/generate-pixel-characters.js`.
-6. Regenerate the PNGs.
-7. Keep alignment fixes in the generator so every equipment layer stays compatible.
+3. The generator writes `assets/generated-characters/catalog.json`, which is the source of truth for available slots, labels, rarities, and spritesheets.
+4. Phaser loads the generated body, skin, hair, armor, helmet, hat, cape, weapon, shield, mount, and future cosmetic layers from the catalog.
+5. Test in Phaser.
+6. Improve the drawing functions in `tools/generate-pixel-characters.js`.
+7. Regenerate the PNGs.
+8. Keep alignment fixes in the generator so every equipment layer stays compatible.
+
+## Adding Cosmetics
+
+Add cosmetics by creating a new entry in the `layers` table in `tools/generate-pixel-characters.js`.
+
+Each entry needs:
+- `slot`, such as `hat`, `mount`, `cape`, `aura`, or `pet`.
+- Stable `id`, such as `witchHat` or `blackHorse`.
+- UI `label`.
+- `rarity`: `common`, `rare`, `epic`, or `legacy`.
+- A draw function or future imported handmade spritesheet path.
+
+Then run:
+
+```bash
+npm run generate:characters
+npm run verify:characters
+```
+
+Cosmetics are visual only for now. Unlocks, inventory, and shop behavior should use the existing catalog fields (`defaultUnlocked`, `rarity`) later instead of changing the rendering contract.
 
 ## Why This Is Better For Legacy
 

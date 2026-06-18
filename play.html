@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Legacy - Play</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fondamento&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game-area">
+        <div id="game" role="img" aria-label="Legacy game canvas"></div>
+        <div id="deathScreen" class="overlay hidden">
+          <div class="panel">
+            <p class="eyebrow">A grave has appeared</p>
+            <h1 id="deathTitle">Your heir awaits.</h1>
+            <p id="deathSummary"></p>
+            <button id="newHeirButton" type="button">Create an heir</button>
+          </div>
+        </div>
+        <div id="startScreen" class="overlay">
+          <div class="panel">
+            <p class="eyebrow">Legacy V1 multiplayer</p>
+            <h1>One life. A world that remembers.</h1>
+            <div class="form-row">
+              <label for="heroName">Name</label>
+              <input id="heroName" maxlength="14" value="Kael" />
+            </div>
+            <div class="form-row">
+              <label for="houseName">House</label>
+              <input id="houseName" maxlength="18" value="Valen" />
+            </div>
+            <div class="creator-layout" aria-label="Character appearance">
+              <div class="character-preview" aria-label="Character preview">
+                <div id="creatorPreviewStage" class="preview-stage"></div>
+                <div id="previewModeTabs" class="preview-mode-tabs" aria-label="Preview animation">
+                  <button type="button" data-preview-mode="idle" class="is-active">Idle</button>
+                  <button type="button" data-preview-mode="walk">Walk</button>
+                  <button type="button" data-preview-mode="attack">Attack</button>
+                </div>
+              </div>
+              <div class="appearance-panel">
+                <div id="appearanceTabs" class="appearance-tabs" aria-label="Appearance categories"></div>
+                <div id="appearanceOptions" class="appearance-options"></div>
+              </div>
+            </div>
+            <select id="bodySelect" hidden></select>
+            <select id="skinSelect" hidden></select>
+            <select id="hairSelect" hidden></select>
+            <select id="armorSelect" hidden></select>
+            <select id="helmetSelect" hidden></select>
+            <select id="hatSelect" hidden></select>
+            <select id="weaponSelect" hidden></select>
+            <select id="shieldSelect" hidden></select>
+            <select id="capeSelect" hidden></select>
+            <select id="mountSelect" hidden></select>
+            <select id="petSelect" hidden></select>
+            <select id="auraSelect" hidden></select>
+            <button id="startButton" type="button">Enter the haven</button>
+          </div>
+        </div>
+        <div id="mobileControls" class="mobile-controls" aria-hidden="true">
+          <div id="moveStick" class="mobile-stick">
+            <div id="moveStickKnob" class="mobile-stick-knob"></div>
+          </div>
+          <button id="mobileAttackButton" class="mobile-attack" type="button" aria-label="Attack"></button>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <header>
+          <p class="eyebrow">House</p>
+          <h2 id="dynastyName">-</h2>
+        </header>
+
+        <section class="stat-grid" aria-label="Character stats">
+          <div class="wide-stat"><span>Area</span><strong id="areaStat">Haven</strong></div>
+          <div><span>Level</span><strong id="levelStat">1</strong></div>
+          <div><span>HP</span><strong id="hpStat">100</strong></div>
+          <div><span>Gold</span><strong id="goldStat">0</strong></div>
+          <div><span>Renown</span><strong id="renownStat">0</strong></div>
+        </section>
+
+        <section>
+          <h3>Log</h3>
+          <ol id="log" class="log"></ol>
+        </section>
+
+        <section>
+          <h3>Hall of Legends</h3>
+          <div id="legends" class="legends"></div>
+        </section>
+
+        <section>
+          <h3>Controls</h3>
+          <p class="hint">ZQSD/WASD to move. Left click or Space attacks toward the mouse. Portals lead from haven into deeper shared depths.</p>
+        </section>
+      </aside>
+    </main>
+
+    <script src="node_modules/phaser/dist/phaser.js"></script>
+    <script defer src="src/game.js"></script>
+  </body>
+</html>

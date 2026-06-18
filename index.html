@@ -3,130 +3,163 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Legacy - V1</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>Legacy - One Life, A World That Remembers</title>
+    <meta
+      name="description"
+      content="Legacy is a playable browser RPG prototype about permanent death, dynasties, shared depths, and a Hall of Legends that remembers every run."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fondamento&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="site.css" />
   </head>
-  <body>
-    <main class="shell">
-      <section class="game-area">
-        <div id="game" role="img" aria-label="Legacy game canvas"></div>
-        <div id="deathScreen" class="overlay hidden">
-          <div class="panel">
-            <p class="eyebrow">A grave has appeared</p>
-            <h1 id="deathTitle">Your heir awaits.</h1>
-            <p id="deathSummary"></p>
-            <button id="newHeirButton" type="button">Create an heir</button>
+  <body class="site-body">
+    <header class="site-nav" aria-label="Primary navigation">
+      <a class="brand-mark" href="index.html">Legacy</a>
+      <nav>
+        <a href="#world">World</a>
+        <a href="#systems">Systems</a>
+        <a href="docs.html">Docs</a>
+      </nav>
+      <a class="nav-play" href="play.html">Play Now</a>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-world" aria-hidden="true">
+          <div class="tile-field">
+            <span class="tile grass"></span>
+            <span class="tile grass"></span>
+            <span class="tile forest"></span>
+            <span class="tile path"></span>
+            <span class="tile ruin"></span>
+            <span class="tile grass"></span>
+            <span class="tile water"></span>
+            <span class="tile bridge"></span>
+            <span class="tile path"></span>
+            <span class="tile grave"></span>
+            <span class="tile marsh"></span>
+            <span class="tile ruin"></span>
+            <span class="tile forest"></span>
+            <span class="tile grass"></span>
+            <span class="tile portal"></span>
+            <span class="tile grave"></span>
+            <span class="tile path"></span>
+            <span class="tile grass"></span>
+            <span class="tile ruin"></span>
+            <span class="tile marsh"></span>
+          </div>
+          <div class="sprite monster ruin-crawler"></div>
+          <div class="sprite monster grave-wraith"></div>
+          <div class="sprite monster cinder-brute"></div>
+        </div>
+
+        <div class="hero-copy">
+          <p class="eyebrow">Playable browser RPG prototype</p>
+          <h1 id="hero-title">Legacy</h1>
+          <p class="hero-text">One life. A dynasty that survives you. A shared world where graves, relics, and records become the story everyone inherits.</p>
+          <div class="hero-actions" aria-label="Main actions">
+            <a class="button-primary" href="play.html">Play Now</a>
+            <a class="button-secondary" href="docs.html">Read Docs</a>
           </div>
         </div>
-        <div id="startScreen" class="overlay">
-          <div class="panel">
-            <p class="eyebrow">Legacy V1 multiplayer</p>
-            <h1>One life. A world that remembers.</h1>
-            <div class="form-row">
-              <label for="heroName">Name</label>
-              <input id="heroName" maxlength="14" value="Kael" />
-            </div>
-            <div class="form-row">
-              <label for="houseName">House</label>
-              <input id="houseName" maxlength="18" value="Valen" />
-            </div>
-            <div class="appearance-grid" aria-label="Character appearance">
-              <div class="form-row">
-                <label for="armorSelect">Armor</label>
-                <select id="armorSelect">
-                  <option value="leather">Leather</option>
-                  <option value="iron">Iron</option>
-                  <option value="dark">Dark</option>
-                  <option value="none">None</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="helmetSelect">Helmet</label>
-                <select id="helmetSelect">
-                  <option value="ironCap">Iron cap</option>
-                  <option value="horned">Horned</option>
-                  <option value="hood">Hood</option>
-                  <option value="none">None</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="weaponSelect">Weapon</label>
-                <select id="weaponSelect">
-                  <option value="sword">Sword</option>
-                  <option value="axe">Axe</option>
-                  <option value="staff">Staff</option>
-                  <option value="none">None</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="shieldSelect">Shield</label>
-                <select id="shieldSelect">
-                  <option value="round">Round</option>
-                  <option value="tower">Tower</option>
-                  <option value="none">None</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="capeSelect">Cape</label>
-                <select id="capeSelect">
-                  <option value="red">Red</option>
-                  <option value="blue">Blue</option>
-                  <option value="green">Green</option>
-                  <option value="none">None</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="mountSelect">Mount</label>
-                <select id="mountSelect">
-                  <option value="none">None</option>
-                  <option value="horseBrown">Brown horse</option>
-                  <option value="horseGrey">Grey horse</option>
-                </select>
-              </div>
-            </div>
-            <button id="startButton" type="button">Enter the haven</button>
+
+        <dl class="hero-metrics" aria-label="Current prototype highlights">
+          <div>
+            <dt>100</dt>
+            <dd>Combat depths</dd>
           </div>
+          <div>
+            <dt>60 Hz</dt>
+            <dd>Server ticks</dd>
+          </div>
+          <div>
+            <dt>1</dt>
+            <dd>Life per heir</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="world" class="section band">
+        <div class="section-heading">
+          <p class="eyebrow">The world loop</p>
+          <h2>Leave the haven, descend, return changed.</h2>
         </div>
-        <div id="mobileControls" class="mobile-controls" aria-hidden="true">
-          <div id="moveStick" class="mobile-stick">
-            <div id="moveStickKnob" class="mobile-stick-knob"></div>
-          </div>
-          <button id="mobileAttackButton" class="mobile-attack" type="button" aria-label="Attack"></button>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <span class="feature-icon tile-icon haven"></span>
+            <h3>Haven</h3>
+            <p>A monster-free hub where every heir begins before stepping onto the portal tile that opens Depth 1.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon tile-icon portal-icon"></span>
+            <h3>Shared Depths</h3>
+            <p>Combat maps scale by depth, cycle through dark biomes, and keep exact portal tiles for forward and return travel.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon monster-icon"></span>
+            <h3>Monsters</h3>
+            <p>Ruin crawlers, marsh maws, grave wraiths, and cinder brutes grow harsher as the descent deepens.</p>
+          </article>
         </div>
       </section>
 
-      <aside class="sidebar">
-        <header>
-          <p class="eyebrow">House</p>
-          <h2 id="dynastyName">-</h2>
-        </header>
+      <section id="systems" class="section split-section">
+        <div>
+          <p class="eyebrow">Permanent death</p>
+          <h2>Your character dies. Your house does not.</h2>
+          <p class="section-copy">
+            Each run builds level, gold, kills, and power until the world takes the heir back. Death creates a grave, adds renown to the house, and may leave a relic behind for the Hall of Legends.
+          </p>
+          <a class="text-link" href="docs.html#death">Read the death rules</a>
+        </div>
+        <div class="system-list" aria-label="Legacy systems">
+          <div>
+            <strong>Authoritative server</strong>
+            <span>Movement, attacks, loot, warps, enemy AI, and death are resolved by Node.js.</span>
+          </div>
+          <div>
+            <strong>Direction-first combat</strong>
+            <span>Attacks use a short rectangular hit zone aimed toward the mouse or mobile attack direction.</span>
+          </div>
+          <div>
+            <strong>Hall of Legends</strong>
+            <span>Server records expose top lives, recent graves, oldest dynasty, and earned relics.</span>
+          </div>
+        </div>
+      </section>
 
-        <section class="stat-grid" aria-label="Character stats">
-          <div class="wide-stat"><span>Area</span><strong id="areaStat">Haven</strong></div>
-          <div><span>Level</span><strong id="levelStat">1</strong></div>
-          <div><span>HP</span><strong id="hpStat">100</strong></div>
-          <div><span>Gold</span><strong id="goldStat">0</strong></div>
-          <div><span>Renown</span><strong id="renownStat">0</strong></div>
-        </section>
+      <section class="section showcase-strip" aria-label="Game visuals">
+        <div class="showcase-panel">
+          <span class="tile-preview ruin-preview"></span>
+          <strong>Ruined Outskirts</strong>
+          <small>Depth-biome combat maps</small>
+        </div>
+        <div class="showcase-panel">
+          <span class="tile-preview grave-preview"></span>
+          <strong>Grave Barrens</strong>
+          <small>Permanent records and tombs</small>
+        </div>
+        <div class="showcase-panel">
+          <span class="tile-preview marsh-preview"></span>
+          <strong>Marsh Causeway</strong>
+          <small>Slow terrain and hazard paths</small>
+        </div>
+        <div class="showcase-panel">
+          <span class="tile-preview portal-preview"></span>
+          <strong>Depth Rift</strong>
+          <small>Event-triggered enemy waves</small>
+        </div>
+      </section>
 
-        <section>
-          <h3>Log</h3>
-          <ol id="log" class="log"></ol>
-        </section>
-
-        <section>
-          <h3>Hall of Legends</h3>
-          <div id="legends" class="legends"></div>
-        </section>
-
-        <section>
-          <h3>Controls</h3>
-          <p class="hint">ZQSD/WASD to move. Left click or Space attacks toward the mouse. The portal connects the haven and the ruins.</p>
-        </section>
-      </aside>
+      <section class="final-cta">
+        <p class="eyebrow">Ready for the next heir?</p>
+        <h2>Step into the haven and see what your house remembers.</h2>
+        <div class="hero-actions">
+          <a class="button-primary" href="play.html">Play Legacy</a>
+          <a class="button-secondary" href="docs.html">Open Documentation</a>
+        </div>
+      </section>
     </main>
-
-    <script src="node_modules/phaser/dist/phaser.js"></script>
-    <script defer src="src/game.js"></script>
   </body>
 </html>

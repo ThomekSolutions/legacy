@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Legacy - Gameplay Documentation</title>
+    <meta name="description" content="Player-facing documentation for Legacy's current gameplay systems, controls, worlds, combat, loot, death, and persistence." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fondamento&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body class="site-body doc-body">
+    <header class="site-nav" aria-label="Primary navigation">
+      <a class="brand-mark" href="index.html">Legacy</a>
+      <nav>
+        <a href="index.html#world">World</a>
+        <a href="index.html#systems">Systems</a>
+        <a href="docs.html">Docs</a>
+      </nav>
+      <a class="nav-play" href="play.html">Play Now</a>
+    </header>
+
+    <main class="docs-shell">
+      <aside class="docs-toc" aria-label="Documentation sections">
+        <p class="eyebrow">Docs</p>
+        <a href="#overview">Overview</a>
+        <a href="#creation">Character Creation</a>
+        <a href="#controls">Controls</a>
+        <a href="#worlds">Worlds And Portals</a>
+        <a href="#combat">Combat</a>
+        <a href="#loot">Loot And Progression</a>
+        <a href="#death">Death And Legacy</a>
+        <a href="#technical">Technical Notes</a>
+      </aside>
+
+      <article class="docs-content">
+        <header class="docs-hero">
+          <p class="eyebrow">Player documentation</p>
+          <h1>Legacy Gameplay Systems</h1>
+          <p>
+            Legacy is a playable multiplayer browser RPG prototype. The current build focuses on a fast roguelike loop: create an heir, leave the haven, fight through shared depths, collect power, die permanently, and continue the dynasty.
+          </p>
+        </header>
+
+        <section id="overview" class="doc-section">
+          <h2>Overview</h2>
+          <p>
+            Every player connects to an authoritative Node.js and WebSocket server. The server owns movement, attacks, enemy behavior, warps, loot collection, deaths, and persistence. The browser renders the Phaser client and sends input.
+          </p>
+          <ul>
+            <li>The game starts in <strong>Haven</strong>, a monster-free hub.</li>
+            <li>Combat happens in depth-based maps named <strong>combat</strong>, <strong>combat2</strong>, <strong>combat3</strong>, and so on.</li>
+            <li>The first combat map keeps the id <strong>combat</strong> for compatibility.</li>
+            <li>Depths currently scale up to <strong>Depth 100</strong>.</li>
+            <li>Connected players in the same world can see each other through server snapshots.</li>
+          </ul>
+        </section>
+
+        <section id="creation" class="doc-section">
+          <h2>Character Creation</h2>
+          <p>
+            Before entering the game, the player chooses a hero name, a house name, and cosmetic appearance. The house represents the dynasty that persists after a character dies.
+          </p>
+          <ul>
+            <li>Names are cleaned by the server and capped to safe display text.</li>
+            <li>Every new character starts in Haven at level 1 with 100 HP, 0 XP, 0 gold, and 0 kills.</li>
+            <li>Starting power is <strong>1 + floor(house renown / 35)</strong>, so a successful dynasty gives future heirs a small head start.</li>
+            <li>Cosmetics are validated against the generated character catalog before being accepted by the server.</li>
+            <li>Available cosmetic slots include mount, cape, body, skin, hair, armor, hat, helmet, weapon, shield, pet, and aura.</li>
+          </ul>
+        </section>
+
+        <section id="controls" class="doc-section">
+          <h2>Controls</h2>
+          <div class="doc-grid">
+            <div>
+              <h3>Desktop</h3>
+              <ul>
+                <li>Move with <strong>WASD</strong>, <strong>ZQSD</strong>, or arrow keys.</li>
+                <li>Attack with left click or <strong>Space</strong>.</li>
+                <li>Attacks aim toward the mouse position.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Mobile</h3>
+              <ul>
+                <li>Use the left virtual joystick to move.</li>
+                <li>Use the right attack button or right-side touch area to attack.</li>
+                <li>The canvas disables browser gesture interference for play.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="worlds" class="doc-section">
+          <h2>Worlds And Portals</h2>
+          <p>
+            Maps use 32-pixel tiles in an 80 by 80 world. Haven is the safe hub. Combat maps are procedurally carved paths and rooms using the current depth's biome.
+          </p>
+          <ul>
+            <li><strong>Haven:</strong> no monsters, portal at tile 40,36 leads to Depth 1.</li>
+            <li><strong>Combat entry:</strong> each combat map places the return portal at tile 40,72.</li>
+            <li><strong>Forward travel:</strong> depths below 100 place an exit portal deeper in the map.</li>
+            <li><strong>Return travel:</strong> Depth 1 returns to Haven; deeper maps return to the previous combat depth.</li>
+            <li><strong>Exact tile rule:</strong> a player warps only when their current tile is a portal tile.</li>
+            <li><strong>Portal cooldown:</strong> after warping, the player has a 1.2 second portal cooldown.</li>
+            <li><strong>Healing return:</strong> returning to Haven restores up to 30 HP without exceeding max HP.</li>
+          </ul>
+          <p>
+            Biomes rotate through Ruined Outskirts, Marsh Causeway, Grave Barrens, Wildwood Hollow, Ashen Keep, and Cinder Vault. Depth affects enemy count, enemy strength, loot quantity, and rare loot odds.
+          </p>
+        </section>
+
+        <section id="combat" class="doc-section">
+          <h2>Combat</h2>
+          <p>
+            Combat is real-time and server-authoritative. Players can swing in Haven, but attacks only damage enemies in combat worlds.
+          </p>
+          <ul>
+            <li>The server ticks at <strong>60 Hz</strong>.</li>
+            <li>Base movement speed is <strong>248</strong> units per second.</li>
+            <li>Marsh terrain slows player movement to <strong>176</strong> units per second.</li>
+            <li>Player hitbox radius is <strong>6.5</strong>.</li>
+            <li>Attack cooldown is <strong>0.42 seconds</strong>.</li>
+            <li>The attack shape is a rectangle with range <strong>39</strong> and half-width <strong>18</strong>.</li>
+            <li>Player damage is <strong>19 + level * 5 + power * 4</strong>.</li>
+            <li>All enemies inside the attack rectangle can be hit by the same swing.</li>
+          </ul>
+          <p>
+            Enemies wander until a player is close. If a combat player is within 310 units, the enemy chases the nearest target. Enemy contact attacks use a 1.05 second cooldown and kill the player when HP reaches 0.
+          </p>
+          <h3>Enemy Scaling</h3>
+          <ul>
+            <li>Each combat depth starts with <strong>clamp(24 + floor(depth * 0.56), 24, 80)</strong> enemies.</li>
+            <li>Enemy level is based on depth, a random 1-4 level roll, optional level boost, and elite status.</li>
+            <li>Elite chance is <strong>clamp(0.04 + depth * 0.003, 0.04, 0.34)</strong>.</li>
+            <li>Enemy HP is <strong>round((28 + level * 12 + depth * 8) * eliteMultiplier)</strong>, where elite multiplier is 1.85.</li>
+            <li>Enemy damage is <strong>round((5 + level * 2.5 + depth * 0.7) * eliteMultiplier)</strong>, where elite multiplier is 1.45.</li>
+          </ul>
+        </section>
+
+        <section id="loot" class="doc-section">
+          <h2>Loot And Progression</h2>
+          <p>
+            Kills and loot are the main short-term progression systems. Power increases damage immediately, while level increases HP and damage.
+          </p>
+          <ul>
+            <li>Killing an enemy grants <strong>enemy level * 10</strong> XP.</li>
+            <li>Killing an enemy grants <strong>4 + enemy level</strong> gold immediately.</li>
+            <li>Level-up threshold is <strong>current level * 26</strong> XP.</li>
+            <li>Leveling sets XP back to 0, increases level by 1, increases max HP by 16, fully heals the character, and adds 1 power.</li>
+            <li>Loot pickups are collected within 24 units.</li>
+            <li>Common loot grants 5 to 26 plus depth scaling gold and 1 power.</li>
+            <li>Rare loot grants 35 plus depth scaling and random bonus gold, and gives 2 or more power at very deep depths.</li>
+            <li>Enemy loot drop chance is <strong>clamp(0.25 + depth * 0.0015, 0.25, 0.4)</strong>.</li>
+            <li>Rare loot chance is <strong>clamp(0.08 + depth * 0.0045, 0.08, 0.58)</strong>.</li>
+          </ul>
+        </section>
+
+        <section id="death" class="doc-section">
+          <h2>Death And Legacy</h2>
+          <p>
+            Death is permanent for the current character. The player creates a new heir, but the account's dynasty continues through house records, renown, graves, and relics.
+          </p>
+          <ul>
+            <li>A grave records name, level, cause of death, survival time, kills, gold, and date.</li>
+            <li>The account keeps up to 30 personal graves.</li>
+            <li>The public grave list keeps up to 80 recent graves.</li>
+            <li>Renown gained on death is <strong>level * 3 + kills + floor(lifeSeconds / 30)</strong>.</li>
+            <li>Account records track max level, longest life, and most kills.</li>
+            <li>If a character reaches level 3 or at least 8 kills, death can create a relic.</li>
+            <li>Relics are stored both on the account and in the public Hall of Legends list.</li>
+          </ul>
+        </section>
+
+        <section id="technical" class="doc-section">
+          <h2>Technical Notes</h2>
+          <ul>
+            <li>The static client and WebSocket server run from <strong>server.js</strong>.</li>
+            <li>The Phaser game client is loaded only by <strong>play.html</strong>.</li>
+            <li>Server persistence is local JSON at <strong>data/legacy-state.json</strong>.</li>
+            <li>The browser keeps an account id in localStorage under <strong>legacy.accountId.v1</strong>.</li>
+            <li>The <strong>/api/legends</strong> endpoint exposes public records, recent graves, and relics.</li>
+            <li>The Hall of Legends displays server max level, most kills, longest life, oldest dynasty, recent graves, and relics.</li>
+          </ul>
+        </section>
+      </article>
+    </main>
+  </body>
+</html>
