@@ -282,9 +282,292 @@ select {
   width: min(470px, calc(100vw - 36px));
   height: min(708px, calc(100dvh - 12px));
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
   transform: translateY(-50%);
+}
+
+.panel-tabs {
+  display: flex;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.panel-tabs button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 12px;
+  border-width: 8px;
+  border-image-width: 8px;
+  color: #b9ad92;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.panel-tabs button.is-active {
+  color: #fff3d0;
+  filter: brightness(1.16);
+}
+
+.forge-hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  transform: translateX(-50%);
+  border: 12px solid transparent;
+  border-image-source: var(--window-popup);
+  border-image-slice: 24 fill;
+  border-image-width: 12px;
+  border-image-repeat: stretch;
+  background: rgba(5, 6, 5, 0.82);
+  color: #fff3d0;
+  font-size: 0.82rem;
+  text-shadow: 0 2px 0 #000;
+  pointer-events: auto;
+}
+
+.forge-hint button {
+  display: none;
+  min-height: 30px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+}
+
+.forge-panel {
+  width: min(980px, calc(100vw - 36px));
+  height: min(680px, calc(100dvh - 20px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.forge-core {
+  min-height: 0;
+  display: block;
+}
+
+.forge-tab-panel,
+.forge-refine-panel,
+.forge-craft-panel {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.forge-refine-panel {
+  grid-template-columns: minmax(220px, 300px) minmax(280px, 1fr);
+}
+
+.forge-craft-panel {
+  grid-template-columns: minmax(220px, 310px) minmax(320px, 1fr);
+}
+
+.forge-items,
+.forge-details,
+.forge-wallet,
+.forge-actions {
+  min-height: 0;
+  border: 14px solid transparent;
+  border-image-source: var(--window-popup);
+  border-image-slice: 24 fill;
+  border-image-width: 14px;
+  border-image-repeat: stretch;
+  background:
+    linear-gradient(135deg, rgba(28, 29, 27, 0.84), rgba(8, 8, 8, 0.96)),
+    var(--ui-stone) center / 160px 110px repeat;
+}
+
+.forge-items,
+.forge-details,
+.forge-wallet {
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.forge-items {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 8px;
+}
+
+.forge-item {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 1px 8px;
+  padding: 6px;
+  border: 2px solid #3a3934;
+  background: rgba(5, 5, 5, 0.72);
+  color: #ece7dc;
+  text-align: left;
+}
+
+.forge-item img {
+  grid-row: 1 / span 2;
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+}
+
+.forge-item span,
+.forge-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forge-item span {
+  color: #b9ad92;
+  font-size: 0.65rem;
+}
+
+.forge-item strong {
+  font-size: 0.76rem;
+}
+
+.forge-item.is-selected {
+  outline: 2px solid #f4d476;
+}
+
+.forge-item.is-compatible {
+  border-color: #80d986;
+  box-shadow: 0 0 12px rgba(88, 196, 109, 0.26);
+}
+
+.forge-item.is-incompatible {
+  filter: grayscale(0.8) brightness(0.58);
+  opacity: 0.58;
+}
+
+.forge-details {
+  padding: 12px;
+}
+
+.forge-item-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.forge-item-title img {
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+}
+
+.forge-item-title strong,
+.forge-item-title span {
+  display: block;
+}
+
+.forge-item-title span,
+.item-stats {
+  color: #b9ad92;
+  font-size: 0.74rem;
+}
+
+.item-stats {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.unique-power {
+  color: #ffdd76;
+}
+
+.corrupted {
+  color: #ff7777;
+}
+
+.forge-wallet {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+}
+
+.forge-wallet strong {
+  color: #fff3d0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.forge-currency-list {
+  display: grid;
+  gap: 4px;
+}
+
+.forge-currency-list span,
+.forge-currency-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 6px;
+  border: 1px solid #3a3934;
+  background: rgba(0, 0, 0, 0.44);
+  color: #d8ccb0;
+  font-size: 0.68rem;
+}
+
+.forge-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+}
+
+.forge-actions button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 3px 5px;
+  font-size: 0.7rem;
+}
+
+.forge-refine-rules {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  color: #d8ccb0;
+  font-size: 0.78rem;
+}
+
+.forge-details[data-rarity="common"],
+.forge-item[data-rarity="common"] {
+  border-color: #b9b1a0;
+}
+
+.forge-details[data-rarity="magic"],
+.forge-item[data-rarity="magic"] {
+  border-color: #58c46d;
+}
+
+.forge-details[data-rarity="rare"],
+.forge-item[data-rarity="rare"] {
+  border-color: #5fa8ff;
+}
+
+.forge-details[data-rarity="epic"],
+.forge-item[data-rarity="epic"] {
+  border-color: #b66dff;
+}
+
+.forge-details[data-rarity="legendary"],
+.forge-item[data-rarity="legendary"] {
+  border-color: #ff8a2a;
 }
 
 .inventory-header {
@@ -350,7 +633,7 @@ select {
 
 .inventory-core {
   display: grid;
-  grid-template-rows: 286px 112px 42px minmax(74px, auto);
+  grid-template-rows: 270px 104px 36px minmax(34px, auto);
   gap: 8px;
   align-content: start;
   padding: 14px;
@@ -360,7 +643,8 @@ select {
     var(--ui-stone) center / 190px 140px repeat;
 }
 
-.inventory-slots {
+.inventory-slots,
+.resource-slots {
   display: grid;
   grid-template-columns: repeat(5, 50px);
   grid-auto-rows: 50px;
@@ -369,6 +653,7 @@ select {
 }
 
 .item-slot,
+.resource-slot,
 .equipment-item {
   min-width: 0;
   min-height: 0;
@@ -386,25 +671,29 @@ select {
 }
 
 .item-slot[data-rarity="common"],
+.resource-slot[data-rarity="common"],
 .equipment-slot[data-rarity="common"] .equipment-item {
-  border-color: #d8d2bd;
+  border-color: #b9b1a0;
 }
 
 .item-slot[data-rarity="magic"],
+.resource-slot[data-rarity="magic"],
 .equipment-slot[data-rarity="magic"] .equipment-item,
 .item-inspect[data-rarity="magic"] {
-  border-color: #5fa8ff;
-  box-shadow: inset 0 0 0 1px #5fa8ff, 0 0 10px rgba(95, 168, 255, 0.22);
+  border-color: #58c46d;
+  box-shadow: inset 0 0 0 1px #58c46d, 0 0 10px rgba(88, 196, 109, 0.22);
 }
 
 .item-slot[data-rarity="rare"],
+.resource-slot[data-rarity="rare"],
 .equipment-slot[data-rarity="rare"] .equipment-item,
 .item-inspect[data-rarity="rare"] {
-  border-color: #f2cf5b;
-  box-shadow: inset 0 0 0 1px #f2cf5b, 0 0 10px rgba(242, 207, 91, 0.24);
+  border-color: #5fa8ff;
+  box-shadow: inset 0 0 0 1px #5fa8ff, 0 0 10px rgba(95, 168, 255, 0.24);
 }
 
 .item-slot[data-rarity="epic"],
+.resource-slot[data-rarity="epic"],
 .equipment-slot[data-rarity="epic"] .equipment-item,
 .item-inspect[data-rarity="epic"] {
   border-color: #b66dff;
@@ -412,6 +701,7 @@ select {
 }
 
 .item-slot[data-rarity="legendary"],
+.resource-slot[data-rarity="legendary"],
 .equipment-slot[data-rarity="legendary"] .equipment-item,
 .item-inspect[data-rarity="legendary"] {
   border-color: #ff8a2a;
@@ -419,6 +709,7 @@ select {
 }
 
 .item-slot img,
+.resource-slot img,
 .equipment-item img,
 .item-inspect img {
   width: 36px;
@@ -427,11 +718,13 @@ select {
 }
 
 .item-slot strong,
+.resource-slot strong,
 .equipment-item strong {
   font-size: 0.7rem;
 }
 
 .item-slot span,
+.resource-slot span,
 .equipment-item span,
 .equipment-item em,
 .item-inspect p,
@@ -439,6 +732,18 @@ select {
   color: #b9ad92;
   font-size: 0.66rem;
   font-style: normal;
+}
+
+.resource-slot {
+  position: relative;
+}
+
+.resource-slot strong,
+.resource-slot span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .equipment-slots {
@@ -571,6 +876,63 @@ select {
 
 .item-inspect .panel-close {
   margin-left: auto;
+}
+
+.item-tooltip {
+  position: absolute;
+  z-index: 42;
+  width: min(320px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 18px solid transparent;
+  border-image-source: var(--window-popup);
+  border-image-slice: 24 fill;
+  border-image-width: 18px;
+  border-image-repeat: stretch;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(244, 212, 118, 0.09), transparent 42%),
+    rgba(5, 6, 5, 0.96);
+  color: #ece7dc;
+  pointer-events: none;
+  image-rendering: pixelated;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.62);
+}
+
+.item-tooltip h3 {
+  margin: 0 0 5px;
+  color: #fff3d0;
+  font-size: 0.98rem;
+}
+
+.item-tooltip p,
+.item-tooltip small {
+  display: block;
+  margin: 3px 0;
+  color: #b9ad92;
+  font-size: 0.72rem;
+}
+
+.item-tooltip .item-stats {
+  font-size: 0.72rem;
+}
+
+.item-tooltip[data-rarity="magic"] h3 {
+  color: #58c46d;
+}
+
+.item-tooltip[data-rarity="rare"] h3 {
+  color: #5fa8ff;
+}
+
+.item-tooltip[data-rarity="epic"] h3 {
+  color: #b66dff;
+}
+
+.item-tooltip[data-rarity="legendary"] h3 {
+  color: #ff8a2a;
+}
+
+.tooltip-warning {
+  color: #ff9f77 !important;
 }
 
 .sidebar {
@@ -943,6 +1305,54 @@ button[disabled] {
     display: none;
   }
 
+  .forge-hint {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 104px);
+    max-width: calc(100vw - 28px);
+    font-size: 0.72rem;
+  }
+
+  .forge-hint button {
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .forge-panel {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 8px);
+    padding: 6px 8px 8px;
+    border-width: 14px;
+    border-image-width: 14px;
+  }
+
+  .forge-core {
+    gap: 6px;
+  }
+
+  .forge-refine-panel,
+  .forge-craft-panel {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(120px, 0.75fr) minmax(160px, 1fr);
+    gap: 6px;
+  }
+
+  .forge-items {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(156px, 176px);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .forge-wallet {
+    grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+  }
+
+  .forge-actions {
+    grid-column: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: auto;
+  }
+
   .hud-actions {
     right: max(14px, env(safe-area-inset-right));
     bottom: max(118px, calc(env(safe-area-inset-bottom) + 118px));
@@ -961,6 +1371,14 @@ button[disabled] {
     padding: 8px;
     border-width: 16px;
     border-image-width: 16px;
+  }
+
+  .game-panel.forge-panel {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 8px);
+    padding: 6px 8px 8px;
+    border-width: 14px;
+    border-image-width: 14px;
   }
 
   .inventory-panel {
@@ -985,7 +1403,7 @@ button[disabled] {
   }
 
   .inventory-core {
-    grid-template-rows: 236px 98px 40px minmax(86px, auto);
+    grid-template-rows: 224px 90px 34px minmax(44px, auto);
     padding: 10px;
     overflow: auto;
   }

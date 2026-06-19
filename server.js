@@ -29,12 +29,84 @@ const MAX_DEPTH = 100;
 const COMBAT_WORLD_PREFIX = "combat";
 const INVENTORY_SIZE = 10;
 const EQUIPMENT_SLOTS = ["helmet", "chest", "gloves", "boots", "weapon"];
+const FORGE_X = 28 * TILE;
+const FORGE_Y = 42 * TILE;
+const FORGE_RADIUS = 92;
 const RARITIES = [
-  { id: "common", weight: 720, color: "#d8d2bd" },
-  { id: "magic", weight: 210, color: "#5fa8ff" },
-  { id: "rare", weight: 58, color: "#f2cf5b" },
+  { id: "common", weight: 720, color: "#b9b1a0", affixMin: 0, affixMax: 0 },
+  { id: "magic", weight: 210, color: "#58c46d", affixMin: 1, affixMax: 2 },
+  { id: "rare", weight: 58, color: "#5fa8ff", affixMin: 3, affixMax: 4 },
   { id: "epic", weight: 11, color: "#b66dff" },
   { id: "legendary", weight: 1, color: "#ff8a2a" },
+];
+RARITIES.find((rarity) => rarity.id === "epic").affixMin = 5;
+RARITIES.find((rarity) => rarity.id === "epic").affixMax = 6;
+RARITIES.find((rarity) => rarity.id === "legendary").affixMin = 7;
+RARITIES.find((rarity) => rarity.id === "legendary").affixMax = 8;
+const SHARDS = {
+  transmutation: { label: "Transmutation Shard", color: "#58c46d", description: "Upgrades a Common item into a Magic item and adds 1-2 random affixes." },
+  improvement: { label: "Improvement Shard", color: "#5fa8ff", description: "Upgrades a Magic item into a Rare item and fills it to at least 3 affixes." },
+  ascension: { label: "Ascension Shard", color: "#b66dff", description: "Upgrades a Rare item into an Epic item and fills it to at least 5 affixes." },
+  legend: { label: "Legend Shard", color: "#ff8a2a", description: "Upgrades an Epic item into a Legendary item and adds a unique power." },
+  chaos: { label: "Chaos Shard", color: "#d88cff", description: "Rerolls every unlocked affix while keeping the item rarity." },
+  alteration: { label: "Alteration Shard", color: "#8fc8ff", description: "Rerolls one unlocked affix." },
+  exaltation: { label: "Exaltation Shard", color: "#ffe073", description: "Adds one affix if the item is not full." },
+  divine: { label: "Divine Shard", color: "#fff1b0", description: "Rerolls numeric values without changing affix types." },
+  purification: { label: "Purification Shard", color: "#d7f7ff", description: "Removes one unlocked affix." },
+  locking: { label: "Locking Shard", color: "#b7d4ff", description: "Locks one affix so the next reroll will not touch it." },
+  corruption: { label: "Corruption Shard", color: "#d54a4a", description: "Corrupts an item with a powerful and risky random outcome." },
+  quality: { label: "Quality Shard", color: "#d9d2bd", description: "Adds +1% quality, up to 20%." },
+};
+const FRAGMENT_LABELS = {
+  magic: "Magic Fragment",
+  rare: "Rare Fragment",
+  epic: "Epic Fragment",
+  legendary: "Legendary Fragment",
+};
+const FRAGMENT_DESCRIPTIONS = {
+  magic: "Collect 5 Magic Fragments to refine a Transmutation Shard.",
+  rare: "Collect 5 Rare Fragments to refine an Improvement Shard.",
+  epic: "Collect 5 Epic Fragments to refine an Ascension Shard.",
+  legendary: "Collect 5 Legendary Fragments to refine a Legend Shard.",
+};
+const RARITY_UPGRADE_SHARDS = {
+  common: { shard: "transmutation", next: "magic", min: 1 },
+  magic: { shard: "improvement", next: "rare", min: 3 },
+  rare: { shard: "ascension", next: "epic", min: 5 },
+  epic: { shard: "legend", next: "legendary", min: 7 },
+};
+const FRAGMENT_TO_SHARD = {
+  magic: "transmutation",
+  rare: "improvement",
+  epic: "ascension",
+  legendary: "legend",
+};
+const AFFIX_DEFS = [
+  affixDef("flatDamage", "Flat Damage", "major", "offense", [3, 7, 13, 22, 36], ["weapon", "gloves"]),
+  affixDef("damagePct", "Damage", "major", "offense", [4, 7, 11, 16, 24], EQUIPMENT_SLOTS, true),
+  affixDef("critChance", "Critical Chance", "major", "offense", [2, 4, 6, 8, 11], ["helmet", "gloves", "weapon"], true),
+  affixDef("critDamage", "Critical Damage", "major", "offense", [10, 18, 28, 40, 55], ["helmet", "gloves", "weapon"], true),
+  affixDef("attackSpeed", "Attack Speed", "major", "offense", [3, 5, 8, 12, 16], ["gloves", "weapon"], true),
+  affixDef("bossDamage", "Boss Damage", "major", "offense", [5, 9, 14, 20, 28], ["weapon"], true),
+  affixDef("eliteDamage", "Elite Damage", "major", "offense", [5, 9, 14, 20, 28], ["weapon", "gloves"], true),
+  affixDef("flatLife", "Life", "major", "defense", [20, 50, 100, 200, 400], ["helmet", "chest", "gloves", "boots"]),
+  affixDef("lifePct", "Life", "major", "defense", [3, 5, 8, 12, 18], ["helmet", "chest", "boots"], true),
+  affixDef("flatDefense", "Defense", "major", "defense", [4, 8, 15, 26, 42], ["helmet", "chest", "gloves", "boots"]),
+  affixDef("defensePct", "Defense", "major", "defense", [4, 8, 12, 18, 26], ["helmet", "chest", "boots"], true),
+  affixDef("shield", "Shield", "major", "defense", [10, 22, 42, 72, 120], ["helmet", "chest"]),
+  affixDef("shieldRegen", "Shield Regeneration", "major", "defense", [1, 2, 3, 5, 8], ["helmet", "chest"]),
+  affixDef("lifeRegen", "Life Regeneration", "major", "defense", [1, 2, 4, 7, 11], ["helmet", "chest", "boots"]),
+  affixDef("magicFind", "Magic Find", "minor", "utility", [3, 6, 10, 15, 22], EQUIPMENT_SLOTS, true),
+  affixDef("goldFind", "Gold Find", "minor", "utility", [5, 10, 16, 24, 34], EQUIPMENT_SLOTS, true),
+  affixDef("moveSpeed", "Movement Speed", "minor", "utility", [2, 4, 6, 9, 12], ["boots"], true),
+  affixDef("pickupRange", "Pickup Range", "minor", "utility", [4, 8, 14, 22, 34], ["boots", "gloves"]),
+  affixDef("durability", "Extra Durability", "minor", "utility", [5, 10, 18, 28, 42], EQUIPMENT_SLOTS),
+];
+const UNIQUE_POWERS = [
+  { id: "emberPact", label: "Ember Pact", stat: "flatDamage", value: 18 },
+  { id: "graveguard", label: "Graveguard", stat: "flatDefense", value: 24 },
+  { id: "wayfinder", label: "Wayfinder", stat: "moveSpeed", value: 8 },
+  { id: "luckyAsh", label: "Lucky Ash", stat: "magicFind", value: 18 },
 ];
 const ITEM_DEFS = [
   itemDef("helmet", "patched-cap", "Patched Cap"),
@@ -314,14 +386,45 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.t === "forgeCraft") {
+      applyForgeCraft(player, msg);
+      return;
+    }
+
+    if (msg.t === "forgeConvert") {
+      convertFragments(player, msg.fragment);
+      return;
+    }
+
+    if (msg.t === "forgeApplyShard") {
+      applyForgeShard(player, msg);
+      return;
+    }
+
+    if (msg.t === "forgeConvertFragment") {
+      convertFragmentStack(player, msg.fragmentItemId);
+      return;
+    }
+
     if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testGiveItem") {
-      if (player.inventory.length < INVENTORY_SIZE) player.inventory.push(makeItem(1));
+      if (player.inventory.length < INVENTORY_SIZE) player.inventory.push(makeItem(Number(msg.depth) || 1, msg.rarity));
       return;
     }
 
     if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testSpawnPrivateLoot") {
       const world = getWorld(player.world);
       if (world) world.loot.push(makeLoot(player.x, player.y, player.id, world.depth || 1));
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testSpawnCurrencyLoot") {
+      const world = getWorld(player.world);
+      if (world) world.loot.push(makeCurrencyLoot(player.x, player.y, player.id, msg.kind || "fragment", msg.id || "magic", Number(msg.amount) || 1));
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testGiveCurrency") {
+      addResource(player, msg.kind || "fragment", msg.id || "magic", Number(msg.amount) || 1);
       return;
     }
 
@@ -403,6 +506,9 @@ function makeCharacter(profile) {
     power: 1 + Math.floor(profile.renown / 35),
     inventory: [],
     equipment: emptyEquipment(),
+    resources: [],
+    shield: 0,
+    regenTick: 0,
     appearance: cleanAppearance(profile.appearance || randomAppearance()),
     hitbox: { radius: PLAYER_HITBOX_RADIUS },
     facing: 1,
@@ -432,6 +538,8 @@ function makeCharacter(profile) {
     power: Math.max(base.power, Math.round(Number(saved.power) || base.power)),
     inventory: cleanSavedInventory(saved.inventory),
     equipment: cleanSavedEquipment(saved.equipment),
+    resources: mergeResourceStacks([...cleanSavedResources(saved.resources), ...craftingToResources(saved.crafting)]),
+    shield: Math.max(0, Math.round(Number(saved.shield) || 0)),
     appearance: cleanAppearance(saved.appearance || profile.appearance),
   };
 }
@@ -469,6 +577,13 @@ function updatePlayer(player) {
   }
   player.attackCd = Math.max(0, player.attackCd - DT);
   player.portalCd = Math.max(0, player.portalCd - DT);
+  const stats = refreshPlayerVitals(player);
+  player.regenTick = (player.regenTick || 0) + DT;
+  if (player.regenTick >= 1) {
+    player.regenTick = 0;
+    if (stats.lifeRegen > 0) player.hp = Math.min(player.maxHp, player.hp + stats.lifeRegen);
+    if (stats.shieldRegen > 0) player.shield = Math.min(stats.shield, (player.shield || 0) + stats.shieldRegen);
+  }
 
   const len = Math.hypot(player.input.dx, player.input.dy) || 1;
   const dx = player.input.dx / len;
@@ -477,7 +592,7 @@ function updatePlayer(player) {
   if (Math.abs(dx) > 0.05) player.facing = dx > 0 ? 1 : -1;
 
   const tile = tileAt(world, player.x, player.y);
-  const speed = tile === "marsh" ? 176 : 248;
+  const speed = (tile === "marsh" ? 176 : 248) * (1 + stats.moveSpeed / 100);
   const nx = clamp(player.x + dx * speed * DT, TILE, WORLD_W * TILE - TILE);
   const ny = clamp(player.y + dy * speed * DT, TILE, WORLD_H * TILE - TILE);
   moveEntity(player, world, nx, ny);
@@ -488,7 +603,8 @@ function updatePlayer(player) {
 }
 
 function attack(player) {
-  player.attackCd = 0.42;
+  const stats = refreshPlayerVitals(player);
+  player.attackCd = Math.max(0.18, 0.42 / (1 + stats.attackSpeed / 100));
   player.facing = Math.cos(player.input.angle) >= 0 ? 1 : -1;
   const world = getWorld(player.world);
   if (!isCombatWorld(world)) return;
@@ -509,16 +625,20 @@ function attack(player) {
   }
   if (targets.length === 0) return;
 
-  const damage = 19 + player.level * 5 + player.power * 4;
+  const baseDamage = 19 + player.level * 5 + player.power * 4 + stats.flatDamage;
+  const damageMultiplier = 1 + stats.damagePct / 100;
   const dead = [];
   targets.sort((a, b) => a.along - b.along);
   for (const { enemy } of targets) {
+    const crit = rng() < stats.critChance / 100;
+    const targetBonus = enemy.level >= player.level + 3 ? stats.eliteDamage : 0;
+    const damage = Math.max(1, Math.round(baseDamage * damageMultiplier * (1 + targetBonus / 100) * (crit ? 1 + stats.critDamage / 100 : 1)));
     const dealt = Math.min(damage, Math.max(0, enemy.hp));
     enemy.hp -= damage;
     enemy.hitBy = player.id;
     enemy.damageBy = enemy.damageBy || {};
     enemy.damageBy[player.id] = (enemy.damageBy[player.id] || 0) + dealt;
-    addDamageText(world, enemy.x, enemy.y - 30, dealt);
+    addDamageText(world, enemy.x, enemy.y - 30, crit ? `${dealt}!` : dealt);
     if (enemy.hp <= 0) dead.push(enemy);
   }
 
@@ -527,9 +647,11 @@ function attack(player) {
     if (index === -1) continue;
     player.kills += 1;
     player.xp += enemy.level * 10;
-    player.gold += 4 + enemy.level;
+    player.gold += Math.round((4 + enemy.level) * (1 + stats.goldFind / 100));
     const ownerId = getLootOwner(enemy) || player.id;
-    if (rng() < getLootDropChance(world.depth)) world.loot.push(makeLoot(enemy.x, enemy.y, ownerId, world.depth));
+    if (rng() < getLootDropChance(world.depth) * (1 + stats.magicFind / 100)) world.loot.push(makeLoot(enemy.x, enemy.y, ownerId, world.depth));
+    if (rng() < getFragmentDropChance(world.depth) * (1 + stats.magicFind / 200)) world.loot.push(makeCurrencyLoot(enemy.x, enemy.y, ownerId, "fragment", pickFragmentDrop(world.depth), 1));
+    if (rng() < getShardDropChance(world.depth) * (1 + stats.magicFind / 200)) world.loot.push(makeCurrencyLoot(enemy.x, enemy.y, ownerId, "shard", pickShardDrop(world.depth), 1));
     world.enemies.splice(index, 1);
     world.enemies.push(makeEnemy(world.id, Math.floor(player.level / 2)));
     while (player.xp >= player.level * 26) levelUp(player);
@@ -547,11 +669,18 @@ function levelUp(player) {
 function collectLoot(player) {
   const world = getWorld(player.world);
   if (!isCombatWorld(world)) return;
+  const stats = derivePlayerStats(player);
   const loot = world.loot;
   for (let i = loot.length - 1; i >= 0; i -= 1) {
-    const item = loot[i];
-    if (item.ownerId === player.id && distance(player, item) < 24 && player.inventory.length < INVENTORY_SIZE) {
-      player.inventory.push(item.item);
+    const drop = loot[i];
+    if (drop.ownerId !== player.id || distance(player, drop) >= 24 + stats.pickupRange) continue;
+    if (drop.kind === "currency") {
+      addResource(player, drop.currency.kind, drop.currency.id, drop.currency.amount);
+      loot.splice(i, 1);
+      continue;
+    }
+    if (player.inventory.length < INVENTORY_SIZE) {
+      player.inventory.push(drop.item);
       loot.splice(i, 1);
     }
   }
@@ -606,7 +735,7 @@ function updateEnemies() {
 
       enemy.attackCd = Math.max(0, enemy.attackCd - DT);
       if (target && nearest < PLAYER_HITBOX_RADIUS + getMonsterHitbox(enemy.kind).radius && enemy.attackCd <= 0) {
-        if (process.env.LEGACY_TEST_MODE !== "1") target.hp -= enemy.dmg;
+        if (process.env.LEGACY_TEST_MODE !== "1") applyIncomingDamage(target, enemy.dmg);
         enemy.attackCd = 1.05;
         if (target.hp <= 0) killPlayer(target, enemy.name);
       }
@@ -637,7 +766,7 @@ function addDamageText(world, x, y, value) {
     id: cryptoId(),
     x: round2(x + (rng() - 0.5) * 14),
     y: round2(y + (rng() - 0.5) * 8),
-    value: Math.max(1, Math.round(value)),
+    value: typeof value === "string" ? value : Math.max(1, Math.round(value)),
     born: Date.now(),
     life: 850,
   });
@@ -690,6 +819,8 @@ function killPlayer(player, cause) {
   player.gold = 0;
   player.inventory = [];
   player.equipment = emptyEquipment();
+  player.resources = [];
+  player.shield = 0;
   player.meta.lastLiveState = null;
   player.ws.send(JSON.stringify({ t: "death", grave, meta: player.meta }));
   savePersisted();
@@ -717,6 +848,7 @@ function broadcastWorld() {
 function snapshotWorld(worldId, includeTiles, viewer) {
   const world = getWorld(worldId);
   if (!world) return null;
+  if (viewer) refreshPlayerVitals(viewer);
   const snapshot = {
     id: worldId,
     name: world.name,
@@ -725,7 +857,9 @@ function snapshotWorld(worldId, includeTiles, viewer) {
     portal: world.portal,
     portals: world.portals || (world.portal ? [world.portal] : []),
     event: world.event || null,
-    players: [...clients.values()].filter((p) => !p.dead && p.world === worldId).map((p) => ({
+    players: [...clients.values()].filter((p) => !p.dead && p.world === worldId).map((p) => {
+      refreshPlayerVitals(p);
+      return ({
       id: p.id,
       name: p.name,
       house: "",
@@ -733,6 +867,7 @@ function snapshotWorld(worldId, includeTiles, viewer) {
       y: round2(p.y),
       hp: Math.max(0, Math.round(p.hp)),
       maxHp: p.maxHp,
+      shield: Math.max(0, Math.round(p.shield || 0)),
       level: p.level,
       xp: p.xp,
       gold: p.gold,
@@ -744,7 +879,9 @@ function snapshotWorld(worldId, includeTiles, viewer) {
       attackCd: p.attackCd,
       attackAngle: p.input.angle,
       attackSpec: getAttackSpec(p),
-    })),
+      stats: p.id === viewer?.id ? derivePlayerStats(p) : undefined,
+    });
+    }),
     enemies: world.enemies.map((e) => ({
       id: e.id,
       name: e.name,
@@ -768,19 +905,25 @@ function snapshotWorld(worldId, includeTiles, viewer) {
       life: text.life,
     })),
     inventory: viewer ? viewer.inventory.map(publicItem) : [],
+    resources: viewer ? (viewer.resources || []).map(publicItem) : [],
     equipment: viewer ? publicEquipment(viewer.equipment) : emptyEquipment(),
+    forgeNearby: viewer ? isNearForge(viewer) : false,
     inventorySize: INVENTORY_SIZE,
     equipmentSlots: EQUIPMENT_SLOTS,
     rarities: RARITIES.map((rarity) => ({ id: rarity.id, color: rarity.color })),
+    shards: Object.fromEntries(Object.entries(SHARDS).map(([id, def]) => [id, { id, label: def.label, color: def.color, description: def.description }])),
+    fragments: Object.fromEntries(Object.entries(FRAGMENT_LABELS).map(([id, label]) => [id, { id, label, description: FRAGMENT_DESCRIPTIONS[id] }])),
     loot: world.loot
       .filter((l) => viewer && l.ownerId === viewer.id)
       .map((l) => ({
         id: l.id,
-        name: l.item.name,
+        kind: l.kind || "item",
+        name: l.kind === "currency" ? l.currency.label : l.item.name,
         x: round2(l.x),
         y: round2(l.y),
-        item: publicItem(l.item),
-        rarity: l.item.rarity,
+        item: l.item ? publicItem(l.item) : null,
+        currency: l.currency || null,
+        rarity: l.item?.rarity || l.currency?.rarity || "common",
       })),
   };
   if (includeTiles) snapshot.tiles = world.tiles;
@@ -969,14 +1112,23 @@ function getLootDropChance(depth) {
   return clamp(0.04 + depth * 0.0004, 0.04, 0.08);
 }
 
+function getFragmentDropChance(depth) {
+  return clamp(0.12 + depth * 0.001, 0.12, 0.22);
+}
+
+function getShardDropChance(depth) {
+  return clamp(0.015 + depth * 0.0005, 0.015, 0.05);
+}
+
 function isCombatWorld(world) {
   return Boolean(world && world.depth > 0);
 }
 
 function getAttackSpec(player) {
+  const stats = derivePlayerStats(player);
   return {
     shape: BASE_ATTACK.shape,
-    range: BASE_ATTACK.range,
+    range: BASE_ATTACK.range + Math.min(26, Math.round(stats.pickupRange * 0.25)),
     halfWidth: BASE_ATTACK.halfWidth,
   };
 }
@@ -1350,6 +1502,7 @@ function makeLoot(x, y, ownerId, depth = 1) {
   const item = makeItem(depth);
   return {
     id: cryptoId(),
+    kind: "item",
     ownerId,
     x,
     y,
@@ -1357,22 +1510,167 @@ function makeLoot(x, y, ownerId, depth = 1) {
   };
 }
 
-function makeItem(depth = 1) {
-  const base = ITEM_DEFS[Math.floor(rng() * ITEM_DEFS.length)];
-  const rarity = pickRarity(depth);
+function makeCurrencyLoot(x, y, ownerId, kind, id, amount = 1) {
+  const normalizedKind = kind === "shard" ? "shard" : "fragment";
+  const normalizedId = normalizedKind === "shard" && SHARDS[id] ? id : normalizedKind === "fragment" && FRAGMENT_LABELS[id] ? id : normalizedKind === "shard" ? "transmutation" : "magic";
+  const rarity = normalizedKind === "shard" ? shardRarity(normalizedId) : normalizedId;
+  const resource = makeResourceItem(normalizedKind, normalizedId, amount);
   return {
+    id: cryptoId(),
+    kind: "currency",
+    ownerId,
+    x,
+    y,
+    currency: {
+      kind: normalizedKind,
+      id: normalizedId,
+      amount: Math.max(1, Math.round(amount)),
+      label: resource.name,
+      rarity,
+      item: publicItem(resource),
+    },
+  };
+}
+
+function makeResourceItem(kind, id, amount = 1) {
+  const resourceKind = kind === "shard" ? "shard" : "fragment";
+  const resourceId = resourceKind === "shard" && SHARDS[id] ? id : resourceKind === "fragment" && FRAGMENT_LABELS[id] ? id : resourceKind === "shard" ? "transmutation" : "magic";
+  const shard = SHARDS[resourceId];
+  const fragment = FRAGMENT_LABELS[resourceId];
+  return {
+    uid: cryptoId(),
+    id: `${resourceKind}-${resourceId}`,
+    type: "resource",
+    resourceKind,
+    resourceId,
+    stack: Math.max(1, Math.round(Number(amount) || 1)),
+    maxStack: null,
+    name: resourceKind === "shard" ? shard.label : fragment,
+    description: resourceKind === "shard" ? shard.description : FRAGMENT_DESCRIPTIONS[resourceId],
+    rarity: resourceKind === "shard" ? shardRarity(resourceId) : resourceId,
+    icon: "assets/ui/ui-icon-gold.png",
+  };
+}
+
+function makeItem(depth = 1, forcedRarity = null) {
+  const base = ITEM_DEFS[Math.floor(rng() * ITEM_DEFS.length)];
+  const rarity = RARITIES.some((entry) => entry.id === forcedRarity) ? forcedRarity : pickRarity(depth);
+  const item = {
     uid: cryptoId(),
     id: base.id,
     name: rarityName(base.name, rarity),
     type: base.type,
     typeLabel: equipmentSlotLabel(base.type),
     rarity,
+    itemLevel: clamp(Math.round(Number(depth) || 1), 1, MAX_DEPTH),
+    quality: 0,
+    mainStat: makeMainStat(base.type, depth),
+    affixes: [],
+    uniquePowers: [],
+    corrupted: false,
+    locked: false,
     icon: `assets/generated-items/${base.id}.png`,
   };
+  fillAffixesToRarity(item);
+  if (rarity === "legendary") item.uniquePowers.push(rollUniquePower());
+  return item;
 }
 
 function itemDef(type, id, name) {
   return { type, id, name };
+}
+
+function affixDef(id, label, group, category, tiers, slots, percent = false) {
+  return { id, label, group, category, tiers, slots, percent };
+}
+
+function makeMainStat(type, depth = 1) {
+  const level = clamp(Math.round(Number(depth) || 1), 1, MAX_DEPTH);
+  if (type === "weapon") {
+    return { id: "damage", label: "Damage", value: Math.round(8 + level * 1.8), percent: false };
+  }
+  return { id: "life", label: "Life", value: Math.round(12 + level * 2.2), percent: false };
+}
+
+function mainStatValue(item) {
+  const value = Number(item.mainStat?.value) || 0;
+  return Math.round(value * (1 + (Number(item.quality) || 0) / 100));
+}
+
+function fillAffixesToRarity(item, minimum = null) {
+  const rarity = rarityDef(item.rarity);
+  const target = minimum ?? (rarity.affixMin + Math.floor(rng() * (rarity.affixMax - rarity.affixMin + 1)));
+  while (item.affixes.length < target && item.affixes.length < rarity.affixMax) addRandomAffix(item);
+}
+
+function addRandomAffix(item) {
+  const max = rarityDef(item.rarity).affixMax;
+  if (!item || item.affixes.length >= max) return false;
+  const existing = new Set(item.affixes.map((affix) => affix.id));
+  const choices = AFFIX_DEFS.filter((def) => def.slots.includes(item.type) && !existing.has(def.id));
+  if (choices.length === 0) return false;
+  item.affixes.push(rollAffix(choices[Math.floor(rng() * choices.length)], item.itemLevel));
+  return true;
+}
+
+function rollAffix(def, itemLevel = 1) {
+  const maxTier = itemLevel >= 70 ? 1 : itemLevel >= 45 ? 2 : itemLevel >= 25 ? 3 : itemLevel >= 10 ? 4 : 5;
+  const tier = clamp(maxTier + Math.floor(rng() * (6 - maxTier)), 1, 5);
+  const base = def.tiers[5 - tier];
+  const low = Math.max(1, Math.round(base * 0.75));
+  const value = low + Math.floor(rng() * (base - low + 1));
+  return { id: def.id, label: def.label, tier, value, percent: def.percent, group: def.group, category: def.category, locked: false };
+}
+
+function rerollAffixValue(affix) {
+  const def = AFFIX_DEFS.find((entry) => entry.id === affix.id);
+  if (!def) return affix;
+  const base = def.tiers[5 - clamp(Number(affix.tier) || 5, 1, 5)];
+  const low = Math.max(1, Math.round(base * 0.75));
+  return { ...affix, value: low + Math.floor(rng() * (base - low + 1)) };
+}
+
+function rerollAffixSameTier(affix, item) {
+  const def = AFFIX_DEFS.find((entry) => entry.id === affix.id);
+  if (!def) return affix;
+  return rerollAffixValue({ ...rollAffix(def, item.itemLevel), tier: affix.tier, locked: affix.locked });
+}
+
+function upgradeAffix(affix) {
+  const next = { ...affix, tier: Math.max(1, (Number(affix.tier) || 5) - 1) };
+  return rerollAffixValue(next);
+}
+
+function rollUniquePower() {
+  return { ...UNIQUE_POWERS[Math.floor(rng() * UNIQUE_POWERS.length)] };
+}
+
+function rarityDef(rarity) {
+  return RARITIES.find((entry) => entry.id === rarity) || RARITIES[0];
+}
+
+function shardRarity(id) {
+  if (id === "legend" || id === "corruption") return "legendary";
+  if (id === "ascension" || id === "divine" || id === "exaltation") return "epic";
+  if (id === "improvement" || id === "chaos" || id === "locking") return "rare";
+  if (id === "transmutation" || id === "alteration" || id === "purification" || id === "quality") return "magic";
+  return "common";
+}
+
+function pickFragmentDrop(depth) {
+  if (depth >= 60 && rng() < 0.08) return "legendary";
+  if (depth >= 25 && rng() < 0.18) return "epic";
+  if (depth >= 8 && rng() < 0.32) return "rare";
+  return "magic";
+}
+
+function pickShardDrop(depth) {
+  const candidates = depth >= 60
+    ? ["transmutation", "improvement", "ascension", "legend", "chaos", "alteration", "exaltation", "divine", "purification", "locking", "corruption", "quality"]
+    : depth >= 25
+      ? ["transmutation", "improvement", "ascension", "chaos", "alteration", "exaltation", "divine", "purification", "locking", "quality"]
+      : ["transmutation", "improvement", "chaos", "alteration", "purification", "quality"];
+  return candidates[Math.floor(rng() * candidates.length)];
 }
 
 function pickRarity(depth) {
@@ -1413,6 +1711,281 @@ function getLootOwner(enemy) {
   return ownerId;
 }
 
+function derivePlayerStats(player) {
+  const stats = {
+    flatDamage: 0,
+    damagePct: 0,
+    critChance: 5,
+    critDamage: 50,
+    attackSpeed: 0,
+    bossDamage: 0,
+    eliteDamage: 0,
+    flatLife: 0,
+    lifePct: 0,
+    flatDefense: 0,
+    defensePct: 0,
+    shield: 0,
+    shieldRegen: 0,
+    lifeRegen: 0,
+    magicFind: 0,
+    goldFind: 0,
+    moveSpeed: 0,
+    pickupRange: 0,
+    durability: 0,
+  };
+  for (const item of Object.values(player.equipment || {})) {
+    if (!item) continue;
+    if (item.mainStat?.id === "damage") stats.flatDamage += mainStatValue(item);
+    if (item.mainStat?.id === "life") stats.flatLife += mainStatValue(item);
+    for (const affix of item.affixes || []) applyStat(stats, affix.id, affix.value);
+    for (const power of item.uniquePowers || []) applyStat(stats, power.stat, power.value);
+  }
+  stats.flatDefense = Math.round(stats.flatDefense * (1 + stats.defensePct / 100));
+  return stats;
+}
+
+function applyStat(stats, id, value) {
+  if (!Object.prototype.hasOwnProperty.call(stats, id)) return;
+  stats[id] += Number(value) || 0;
+}
+
+function refreshPlayerVitals(player) {
+  const stats = derivePlayerStats(player);
+  const maxHp = Math.max(1, Math.round((100 + (player.level - 1) * 16 + stats.flatLife) * (1 + stats.lifePct / 100)));
+  player.maxHp = maxHp;
+  player.hp = clamp(Number(player.hp) || maxHp, 0, maxHp);
+  player.shield = clamp(Number(player.shield) || 0, 0, stats.shield);
+  return stats;
+}
+
+function applyIncomingDamage(player, rawDamage) {
+  const stats = refreshPlayerVitals(player);
+  let damage = Math.max(1, Math.round((Number(rawDamage) || 0) * (100 / (100 + stats.flatDefense))));
+  if (player.shield > 0) {
+    const absorbed = Math.min(player.shield, damage);
+    player.shield -= absorbed;
+    damage -= absorbed;
+  }
+  if (damage > 0) player.hp -= damage;
+}
+
+function applyForgeCraft(player, msg) {
+  const shard = cleanId(msg.shard);
+  if (SHARDS[shard]) {
+    const stack = (player.resources || []).find((item) => item.resourceKind === "shard" && item.resourceId === shard && item.stack > 0);
+    if (stack) applyForgeShard(player, { shardItemId: stack.uid, targetItemId: msg.itemId, affixId: msg.affixId });
+  }
+}
+
+function applyForgeShard(player, msg) {
+  if (player.dead || !isNearForge(player)) return;
+  const shardStack = findResourceItem(player, msg.shardItemId);
+  if (!shardStack || shardStack.item.resourceKind !== "shard" || shardStack.item.stack <= 0) return;
+  const shard = shardStack.item.resourceId;
+  const target = findPlayerItem(player, msg.targetItemId || msg.itemId);
+  if (!target || target.item.locked || target.item.destroyed) return;
+  const item = target.item;
+  const compatibility = shardCompatibility(shard, item);
+  if (!compatibility.ok) return;
+  let ok = false;
+  if (RARITY_UPGRADE_SHARDS[item.rarity]?.shard === shard) ok = upgradeItemRarity(item);
+  else if (shard === "chaos") ok = rerollAllAffixes(item);
+  else if (shard === "alteration") ok = rerollOneAffix(item, msg.affixId);
+  else if (shard === "exaltation") ok = addRandomAffix(item);
+  else if (shard === "divine") ok = divineItem(item);
+  else if (shard === "purification") ok = purifyItem(item, msg.affixId);
+  else if (shard === "locking") ok = lockAffix(item, msg.affixId);
+  else if (shard === "corruption") ok = corruptItem(player, target);
+  else if (shard === "quality") ok = improveQuality(item);
+  if (!ok) return;
+  consumeResource(player, shardStack, 1);
+  refreshPlayerVitals(player);
+}
+
+function shardCompatibility(shard, item) {
+  if (!SHARDS[shard]) return { ok: false, reason: "Unknown shard" };
+  if (!item || item.type === "resource") return { ok: false, reason: "Select equipment" };
+  if (item.locked) return { ok: false, reason: "Item is permanently locked" };
+  if (RARITY_UPGRADE_SHARDS[item.rarity]?.shard === shard) return { ok: true, reason: "" };
+  if (["transmutation", "improvement", "ascension", "legend"].includes(shard)) {
+    const required = Object.entries(RARITY_UPGRADE_SHARDS).find(([, entry]) => entry.shard === shard)?.[0];
+    return { ok: false, reason: `Requires a ${capitalize(required)} item` };
+  }
+  if (shard === "exaltation" && item.affixes.length >= rarityDef(item.rarity).affixMax) return { ok: false, reason: "Item already has maximum affixes" };
+  if (shard === "quality" && (item.quality || 0) >= 20) return { ok: false, reason: "Item already has maximum quality" };
+  if (["alteration", "divine", "purification", "locking"].includes(shard) && item.affixes.length === 0) return { ok: false, reason: "Item has no affixes" };
+  if (shard === "corruption" && item.corrupted) return { ok: false, reason: "Item is already corrupted" };
+  return { ok: true, reason: "" };
+}
+
+function upgradeItemRarity(item) {
+  const upgrade = RARITY_UPGRADE_SHARDS[item.rarity];
+  if (!upgrade) return false;
+  item.rarity = upgrade.next;
+  item.name = rarityName(baseNameForItem(item), item.rarity);
+  fillAffixesToRarity(item, upgrade.min);
+  if (item.rarity === "legendary" && item.uniquePowers.length === 0) item.uniquePowers.push(rollUniquePower());
+  consumeTemporaryLocks(item);
+  return true;
+}
+
+function rerollAllAffixes(item) {
+  if (!item.affixes.length) return false;
+  const locked = item.affixes.filter((affix) => affix.locked);
+  const rerollCount = item.affixes.length - locked.length;
+  item.affixes = locked;
+  for (let i = 0; i < rerollCount; i += 1) addRandomAffix(item);
+  consumeTemporaryLocks(item);
+  return true;
+}
+
+function rerollOneAffix(item, affixId = "") {
+  const candidates = item.affixes.map((affix, index) => ({ affix, index })).filter((entry) => !entry.affix.locked && (!affixId || entry.affix.id === affixId));
+  if (!candidates.length) return false;
+  const picked = candidates[Math.floor(rng() * candidates.length)];
+  picked.affix = rerollAffixSameTier(picked.affix, item);
+  item.affixes[picked.index] = picked.affix;
+  consumeTemporaryLocks(item);
+  return true;
+}
+
+function divineItem(item) {
+  if (!item.affixes.length) return false;
+  item.affixes = item.affixes.map((affix) => affix.locked ? affix : rerollAffixValue(affix));
+  item.mainStat = makeMainStat(item.type, item.itemLevel);
+  consumeTemporaryLocks(item);
+  return true;
+}
+
+function purifyItem(item, affixId = "") {
+  const candidates = item.affixes.map((affix, index) => ({ affix, index })).filter((entry) => !entry.affix.locked && (!affixId || entry.affix.id === affixId));
+  if (!candidates.length) return false;
+  const picked = candidates[Math.floor(rng() * candidates.length)];
+  item.affixes.splice(picked.index, 1);
+  consumeTemporaryLocks(item);
+  return true;
+}
+
+function lockAffix(item, affixId = "") {
+  const affix = item.affixes.find((entry) => entry.id === affixId) || item.affixes.find((entry) => !entry.locked);
+  if (!affix) return false;
+  affix.locked = true;
+  return true;
+}
+
+function corruptItem(player, target) {
+  const item = target.item;
+  if (item.corrupted) return false;
+  item.corrupted = true;
+  const effect = Math.floor(rng() * 5);
+  if (effect === 0) addRandomAffixBeyondCap(item);
+  if (effect === 1 && item.affixes.length) {
+    const index = Math.floor(rng() * item.affixes.length);
+    item.affixes[index] = upgradeAffix(item.affixes[index]);
+  }
+  if (effect === 2) {
+    removePlayerItem(player, target);
+    return true;
+  }
+  if (effect === 3) item.locked = true;
+  if (effect === 4) item.uniquePowers.push(rollUniquePower());
+  return true;
+}
+
+function addRandomAffixBeyondCap(item) {
+  const oldRarity = item.rarity;
+  item.rarity = "legendary";
+  const result = addRandomAffix(item);
+  item.rarity = oldRarity;
+  return result;
+}
+
+function improveQuality(item) {
+  if ((Number(item.quality) || 0) >= 20) return false;
+  item.quality = Math.min(20, (Number(item.quality) || 0) + 1);
+  return true;
+}
+
+function consumeTemporaryLocks(item) {
+  for (const affix of item.affixes || []) affix.locked = false;
+}
+
+function convertFragments(player, fragment) {
+  if (player.dead || !isNearForge(player)) return;
+  const id = cleanId(fragment);
+  const stack = (player.resources || []).find((item) => item.resourceKind === "fragment" && item.resourceId === id && item.stack >= 5);
+  if (stack) convertFragmentStack(player, stack.uid);
+}
+
+function convertFragmentStack(player, fragmentItemId) {
+  if (player.dead || !isNearForge(player)) return;
+  const stack = findResourceItem(player, fragmentItemId);
+  if (!stack || stack.item.resourceKind !== "fragment" || stack.item.stack < 5) return;
+  const shard = FRAGMENT_TO_SHARD[stack.item.resourceId];
+  if (!shard) return;
+  consumeResource(player, stack, 5);
+  addResource(player, "shard", shard, 1);
+}
+
+function findPlayerItem(player, itemId) {
+  const uid = cleanId(itemId);
+  const inventoryIndex = player.inventory.findIndex((item) => item.uid === uid);
+  if (inventoryIndex !== -1) return { item: player.inventory[inventoryIndex], location: "inventory", index: inventoryIndex };
+  for (const slot of EQUIPMENT_SLOTS) {
+    if (player.equipment[slot]?.uid === uid) return { item: player.equipment[slot], location: "equipment", slot };
+  }
+  return null;
+}
+
+function removePlayerItem(player, target) {
+  if (target.location === "inventory") player.inventory.splice(target.index, 1);
+  if (target.location === "equipment") player.equipment[target.slot] = null;
+}
+
+function addCurrency(player, kind, id, amount = 1) {
+  return addResource(player, kind, id, amount);
+}
+
+function addResource(player, kind, id, amount = 1) {
+  player.resources = Array.isArray(player.resources) ? player.resources : [];
+  const value = Math.max(1, Math.round(Number(amount) || 1));
+  const resourceKind = kind === "shard" ? "shard" : "fragment";
+  const resourceId = resourceKind === "shard" && SHARDS[id] ? id : resourceKind === "fragment" && FRAGMENT_LABELS[id] ? id : null;
+  if (!resourceId) return null;
+  let stack = player.resources.find((item) => item.resourceKind === resourceKind && item.resourceId === resourceId);
+  if (!stack) {
+    stack = makeResourceItem(resourceKind, resourceId, value);
+    player.resources.push(stack);
+    return stack;
+  }
+  stack.stack += value;
+  return stack;
+}
+
+function findResourceItem(player, itemId) {
+  const uid = cleanId(itemId);
+  const index = (player.resources || []).findIndex((item) => item.uid === uid);
+  return index === -1 ? null : { item: player.resources[index], index };
+}
+
+function consumeResource(player, stack, amount = 1) {
+  stack.item.stack -= Math.max(1, Math.round(Number(amount) || 1));
+  if (stack.item.stack <= 0) player.resources.splice(stack.index, 1);
+}
+
+function fragmentForRarity(rarity) {
+  return ["magic", "rare", "epic", "legendary"].includes(rarity) ? rarity : null;
+}
+
+function baseNameForItem(item) {
+  const def = ITEM_DEFS.find((entry) => entry.id === item.id);
+  return def?.name || item.name.replace(/^(Glimmering|Gilded|Runebound|Mythic)\s+/, "");
+}
+
+function isNearForge(player) {
+  return player.world === "haven" && distance(player, { x: FORGE_X, y: FORGE_Y }) <= FORGE_RADIUS;
+}
+
 function equipInventoryItem(player, itemId) {
   if (player.dead) return;
   const index = player.inventory.findIndex((item) => item.uid === itemId);
@@ -1429,12 +2002,17 @@ function equipInventoryItem(player, itemId) {
     player.inventory.push(previous);
   }
   player.equipment[item.type] = item;
+  refreshPlayerVitals(player);
 }
 
 function destroyInventoryItem(player, itemId) {
   if (player.dead) return;
   const index = player.inventory.findIndex((item) => item.uid === itemId);
-  if (index !== -1) player.inventory.splice(index, 1);
+  if (index !== -1) {
+    const [item] = player.inventory.splice(index, 1);
+    const fragment = fragmentForRarity(item.rarity);
+    if (fragment) addResource(player, "fragment", fragment, 1);
+  }
 }
 
 function emptyEquipment() {
@@ -1449,6 +2027,21 @@ function publicEquipment(equipment) {
 
 function publicItem(item) {
   if (!item) return null;
+  if (item.type === "resource") {
+    return {
+      uid: item.uid,
+      id: item.id,
+      name: item.name,
+      type: "resource",
+      resourceKind: item.resourceKind,
+      resourceId: item.resourceId,
+      stack: item.stack,
+      maxStack: item.maxStack,
+      description: item.description,
+      rarity: item.rarity,
+      icon: item.icon,
+    };
+  }
   return {
     uid: item.uid,
     id: item.id,
@@ -1456,17 +2049,25 @@ function publicItem(item) {
     type: item.type,
     typeLabel: item.typeLabel,
     rarity: item.rarity,
+    itemLevel: item.itemLevel,
+    quality: item.quality,
+    mainStat: item.mainStat,
+    mainStatValue: mainStatValue(item),
+    affixes: item.affixes || [],
+    uniquePowers: item.uniquePowers || [],
+    corrupted: Boolean(item.corrupted),
+    locked: Boolean(item.locked),
     icon: item.icon,
   };
 }
 
 function equipmentSlotLabel(slot) {
   return {
-    helmet: "Casque",
-    chest: "Torse",
-    gloves: "Gants",
-    boots: "Bottes",
-    weapon: "Arme",
+    helmet: "Helmet",
+    chest: "Chest",
+    gloves: "Gloves",
+    boots: "Boots",
+    weapon: "Weapon",
   }[slot] || slot;
 }
 
@@ -1590,6 +2191,11 @@ function round2(value) {
   return Math.round(value * 100) / 100;
 }
 
+function capitalize(value) {
+  const text = String(value || "");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
 function cleanName(value, fallback) {
   const clean = String(value || "").replace(/[^\w -]/g, "").trim().slice(0, 18);
   return clean || fallback;
@@ -1663,7 +2269,9 @@ function saveLiveState(player) {
     gold: player.gold,
     kills: player.kills,
     power: player.power,
+    shield: Math.max(0, Math.round(player.shield || 0)),
     inventory: player.inventory.map(publicItem),
+    resources: (player.resources || []).map(publicItem),
     equipment: publicEquipment(player.equipment),
     appearance: cleanAppearance(player.appearance),
     savedAt: new Date().toISOString(),
@@ -1674,6 +2282,10 @@ function cleanSavedInventory(items) {
   return Array.isArray(items) ? items.map(cleanSavedItem).filter(Boolean).slice(0, INVENTORY_SIZE) : [];
 }
 
+function cleanSavedResources(items) {
+  return mergeResourceStacks(Array.isArray(items) ? items.map(cleanSavedResource).filter(Boolean) : []);
+}
+
 function cleanSavedEquipment(equipment) {
   const out = emptyEquipment();
   for (const slot of EQUIPMENT_SLOTS) out[slot] = cleanSavedItem(equipment?.[slot]);
@@ -1682,15 +2294,99 @@ function cleanSavedEquipment(equipment) {
 
 function cleanSavedItem(item) {
   if (!item || !EQUIPMENT_SLOTS.includes(item.type)) return null;
-  return {
+  const itemLevel = clamp(Math.round(Number(item.itemLevel) || 1), 1, MAX_DEPTH);
+  const rarity = RARITIES.some((rarityEntry) => rarityEntry.id === item.rarity) ? item.rarity : "common";
+  const cleanItem = {
     uid: cleanId(item.uid) || cryptoId(),
     id: cleanId(item.id) || "item",
     name: cleanName(item.name, "Item"),
     type: item.type,
     typeLabel: equipmentSlotLabel(item.type),
-    rarity: RARITIES.some((rarity) => rarity.id === item.rarity) ? item.rarity : "common",
+    rarity,
+    itemLevel,
+    quality: clamp(Math.round(Number(item.quality) || 0), 0, 20),
+    mainStat: cleanMainStat(item.mainStat, item.type, itemLevel),
+    affixes: cleanAffixes(item.affixes, item.type, itemLevel, rarity),
+    uniquePowers: cleanUniquePowers(item.uniquePowers),
+    corrupted: Boolean(item.corrupted),
+    locked: Boolean(item.locked),
     icon: String(item.icon || "").startsWith("assets/generated-items/") ? item.icon : `assets/generated-items/${cleanId(item.id) || "equipment-icon"}.png`,
   };
+  cleanItem.name = cleanItem.name || rarityName(baseNameForItem(cleanItem), cleanItem.rarity);
+  return cleanItem;
+}
+
+function cleanSavedResource(item) {
+  if (!item || item.type !== "resource") return null;
+  const kind = item.resourceKind === "shard" ? "shard" : "fragment";
+  const id = cleanId(item.resourceId);
+  if (kind === "shard" && !SHARDS[id]) return null;
+  if (kind === "fragment" && !FRAGMENT_LABELS[id]) return null;
+  return makeResourceItem(kind, id, Math.max(1, Math.round(Number(item.stack) || 1)));
+}
+
+function craftingToResources(crafting) {
+  const out = [];
+  for (const [id, amount] of Object.entries(crafting?.shards || {})) {
+    if (SHARDS[id] && Number(amount) > 0) out.push(makeResourceItem("shard", id, amount));
+  }
+  for (const [id, amount] of Object.entries(crafting?.fragments || {})) {
+    if (FRAGMENT_LABELS[id] && Number(amount) > 0) out.push(makeResourceItem("fragment", id, amount));
+  }
+  return out;
+}
+
+function mergeResourceStacks(items) {
+  const out = [];
+  for (const item of items) {
+    const existing = out.find((entry) => entry.resourceKind === item.resourceKind && entry.resourceId === item.resourceId);
+    if (existing) existing.stack += item.stack;
+    else out.push(item);
+  }
+  return out;
+}
+
+function cleanMainStat(stat, type, itemLevel) {
+  const fallback = makeMainStat(type, itemLevel);
+  const source = stat && typeof stat === "object" ? stat : {};
+  return {
+    id: source.id === "damage" || source.id === "life" ? source.id : fallback.id,
+    label: cleanName(source.label, fallback.label),
+    value: clamp(Math.round(Number(source.value) || fallback.value), 1, 9999),
+    percent: false,
+  };
+}
+
+function cleanAffixes(affixes, type, itemLevel, rarity) {
+  const max = rarityDef(rarity).affixMax + 1;
+  const out = [];
+  for (const affix of Array.isArray(affixes) ? affixes : []) {
+    const def = AFFIX_DEFS.find((entry) => entry.id === affix?.id && entry.slots.includes(type));
+    if (!def) continue;
+    const tier = clamp(Math.round(Number(affix.tier) || 5), 1, 5);
+    const base = def.tiers[5 - tier];
+    out.push({
+      id: def.id,
+      label: def.label,
+      tier,
+      value: clamp(Math.round(Number(affix.value) || base), 1, Math.max(base * 2, 1)),
+      percent: def.percent,
+      group: def.group,
+      category: def.category,
+      locked: Boolean(affix.locked),
+    });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function cleanUniquePowers(powers) {
+  const out = [];
+  for (const power of Array.isArray(powers) ? powers : []) {
+    const def = UNIQUE_POWERS.find((entry) => entry.id === power?.id);
+    if (def) out.push({ ...def });
+  }
+  return out.slice(0, 3);
 }
 
 function publicProfile(profile) {

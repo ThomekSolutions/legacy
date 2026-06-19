@@ -1,9 +1,12 @@
 const { spawn } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 const { WebSocket } = require("ws");
 
 const PORT = 3137;
 const URL = `ws://127.0.0.1:${PORT}/ws`;
 const TILE = 32;
+const DATA_DIR = path.join(__dirname, "..", "artifacts", "test-inventory-data");
 
 main().catch((error) => {
   console.error(error);
@@ -11,9 +14,10 @@ main().catch((error) => {
 });
 
 async function main() {
+  fs.rmSync(DATA_DIR, { recursive: true, force: true });
   const server = spawn(process.execPath, ["server.js"], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT), LEGACY_TEST_MODE: "1" },
+    env: { ...process.env, PORT: String(PORT), LEGACY_TEST_MODE: "1", DATA_DIR },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -107,7 +111,7 @@ async function connectPlayer(name, house) {
 }
 
 async function enterCombat(client) {
-  client.ws.send(JSON.stringify({ t: "input", dx: 0, dy: 0, attack: false, angle: 0, testWarp: { x: 40 * TILE, y: 36 * TILE } }));
+  client.ws.send(JSON.stringify({ t: "input", dx: 0, dy: 0, attack: false, angle: 0, testWarp: { x: 40 * TILE, y: 42 * TILE } }));
   await waitForState(client, (state) => state.snapshot.id === "combat");
 }
 

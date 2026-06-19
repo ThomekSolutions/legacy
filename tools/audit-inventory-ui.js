@@ -162,6 +162,12 @@ function auditScript() {
     panelInsideViewport: panel.x >= 0 && panel.y >= 0 && panel.right <= innerWidth && panel.bottom <= innerHeight,
     noPageScroll: document.documentElement.scrollWidth === innerWidth && document.documentElement.scrollHeight === innerHeight,
     headerText: document.querySelector(".inventory-header").innerText.replace(/\s+/g, " ").trim(),
+    inventoryTabs: [...document.querySelectorAll("#inventoryPanel .panel-tabs button")].map((el) => el.textContent.trim()),
+    forgeTabs: [...document.querySelectorAll("#forgePanel .panel-tabs button")].map((el) => el.textContent.trim()),
+    hasResourceSlots: Boolean(document.querySelector("#resourceSlots")),
+    hasTooltip: Boolean(document.querySelector("#itemTooltip")),
+    hasForgeCraftPanel: Boolean(document.querySelector("#forgeCraftPanel")),
+    hasForgeRefinePanel: Boolean(document.querySelector("#forgeRefinePanel")),
     equipmentLabels: [...document.querySelectorAll("#equipmentSlots .equipment-slot > span")].map((el) => el.textContent),
     inventorySlots: document.querySelectorAll("#inventorySlots .item-slot").length,
     panelContainsAllSections: [header, core, equipment, bag, gold, footer].every((r) => contains(panel, r)),
@@ -212,6 +218,11 @@ function assertAudit(name, audit) {
   if (!audit.noPageScroll) failures.push("page scroll detected");
   if (audit.viewport.width <= 760 && audit.controlsVisible) failures.push("mobile controls should be hidden while inventory is open");
   if (audit.inventorySlots !== 10) failures.push("expected 10 inventory slots");
+  if (audit.inventoryTabs.join("|") !== "Equipment|Shards") failures.push("inventory tabs missing");
+  if (audit.forgeTabs.join("|") !== "Refine|Craft") failures.push("forge tabs missing");
+  if (!audit.hasResourceSlots) failures.push("resource slots container missing");
+  if (!audit.hasTooltip) failures.push("item tooltip missing");
+  if (!audit.hasForgeCraftPanel || !audit.hasForgeRefinePanel) failures.push("forge panels missing");
   if (!audit.panelContainsAllSections) failures.push("panel does not contain all sections");
   if (audit.anySlotOutsideCore) failures.push("a slot is outside core");
   for (const [key, value] of Object.entries(audit.overlaps)) {

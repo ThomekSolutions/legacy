@@ -16,14 +16,30 @@ const ui = {
   inventoryPanel: document.querySelector("#inventoryPanel"),
   characterPanel: document.querySelector("#characterPanel"),
   inventoryClose: document.querySelector("#inventoryClose"),
+  inventoryEquipmentTab: document.querySelector("#inventoryEquipmentTab"),
+  inventoryShardsTab: document.querySelector("#inventoryShardsTab"),
+  forgeHint: document.querySelector("#forgeHint"),
+  forgeHintButton: document.querySelector("#forgeHintButton"),
+  forgePanel: document.querySelector("#forgePanel"),
+  forgeClose: document.querySelector("#forgeClose"),
+  forgeRefineTab: document.querySelector("#forgeRefineTab"),
+  forgeCraftTab: document.querySelector("#forgeCraftTab"),
+  forgeRefinePanel: document.querySelector("#forgeRefinePanel"),
+  forgeCraftPanel: document.querySelector("#forgeCraftPanel"),
+  forgeFragments: document.querySelector("#forgeFragments"),
+  forgeRefineDetails: document.querySelector("#forgeRefineDetails"),
+  forgeShards: document.querySelector("#forgeShards"),
+  forgeEquipment: document.querySelector("#forgeEquipment"),
   characterClose: document.querySelector("#characterClose"),
   inventorySlots: document.querySelector("#inventorySlots"),
+  resourceSlots: document.querySelector("#resourceSlots"),
   equipmentSlots: document.querySelector("#equipmentSlots"),
   inventoryGold: document.querySelector("#inventoryGold"),
   itemMenu: document.querySelector("#itemMenu"),
   itemInspect: document.querySelector("#itemInspect"),
   itemInspectContent: document.querySelector("#itemInspectContent"),
   itemInspectClose: document.querySelector("#itemInspectClose"),
+  itemTooltip: document.querySelector("#itemTooltip"),
   gameArea: document.querySelector(".game-area"),
   mobileControls: document.querySelector("#mobileControls"),
   moveStick: document.querySelector("#moveStick"),
@@ -68,12 +84,14 @@ const EQUIPMENT_SLOT_LABELS = {
   weapon: "Weapon",
 };
 const RARITY_COLORS = {
-  common: "#d8d2bd",
-  magic: "#5fa8ff",
-  rare: "#f2cf5b",
+  common: "#b9b1a0",
+  magic: "#58c46d",
+  rare: "#5fa8ff",
   epic: "#b66dff",
   legendary: "#ff8a2a",
 };
+const SHARD_ORDER = ["transmutation", "improvement", "ascension", "legend", "chaos", "alteration", "exaltation", "divine", "purification", "locking", "corruption", "quality"];
+const FRAGMENT_ORDER = ["magic", "rare", "epic", "legendary"];
 const CHARACTER_ANIMS = {
   idle: 6,
   walk: 8,
@@ -102,6 +120,10 @@ let hasStarted = false;
 let lastInputSent = "";
 let logs = [];
 let gameScene = null;
+let selectedForgeItemId = "";
+let inventoryTab = "equipment";
+let forgeTab = "refine";
+let selectedShardItemId = "";
 const mobileInput = {
   enabled: false,
   movePointerId: null,
@@ -940,7 +962,16 @@ class LegacyScene extends Phaser.Scene {
       let loot = this.lootEntities.get(item.id);
       if (!loot) {
         const halo = this.add.graphics();
-        const bag = this.add.image(0, 0, "loot-bag").setScale(0.62);
+        const bag = item.kind === "currency"
+          ? this.add.text(0, 0, item.currency?.kind === "shard" ? "*" : "+", {
+            fontFamily: UI_FONT,
+            fontSize: "24px",
+            fontStyle: "800",
+            color: item.currency?.color || rarityColor(item.rarity),
+            stroke: "#080807",
+            strokeThickness: 5,
+          }).setOrigin(0.5)
+          : this.add.image(0, 0, "loot-bag").setScale(0.62);
         loot = this.add.container(item.x, item.y, [halo, bag]).setDepth(9);
         loot.halo = halo;
         this.lootEntities.set(item.id, loot);
@@ -1113,14 +1144,9 @@ async function boot() {
 }
 
 async function requireSession() {
-  if (!sessionToken) {
-    location.replace("index.html");
-    return null;
-  }
   try {
-    const response = await fetch("/api/session", {
-      headers: { Authorization: `Bearer ${sessionToken}` },
-    });
+    const headers = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+    const response = await fetch("/api/session", { headers });
     const result = await response.json();
     if (!response.ok || !result.profile || result.profile.needsName) throw new Error("Session incomplete");
     return result;
@@ -1277,8 +1303,10 @@ function updateSidebar() {
   ui.renown.textContent = meta?.renown ?? 0;
   if (ui.inventoryGold) ui.inventoryGold.textContent = self?.gold ?? 0;
   ui.log.innerHTML = logs.slice(0, 4).map((entry) => `<li>${escapeHtml(entry)}</li>`).join("");
+  if (ui.forgeHint) ui.forgeHint.classList.toggle("hidden", !snapshot?.forgeNearby || isOverlayOpen());
   renderInventory();
   renderEquipment();
+  renderForge();
 }
 
 function pushLog(text) {
@@ -1290,23 +1318,50 @@ function pushLog(text) {
 function setupGamePanels() {
   ui.inventoryButton?.addEventListener("click", () => togglePanel(ui.inventoryPanel));
   ui.inventoryClose?.addEventListener("click", () => closePanel(ui.inventoryPanel));
+  ui.inventoryEquipmentTab?.addEventListener("click", () => setInventoryTab("equipment"));
+  ui.inventoryShardsTab?.addEventListener("click", () => setInventoryTab("shards"));
+  ui.forgeClose?.addEventListener("click", () => closePanel(ui.forgePanel));
+  ui.forgeHintButton?.addEventListener("click", () => openForge());
+  ui.forgeRefineTab?.addEventListener("click", () => setForgeTab("refine"));
+  ui.forgeCraftTab?.addEventListener("click", () => setForgeTab("craft"));
   ui.characterClose?.addEventListener("click", () => closePanel(ui.characterPanel));
   ui.itemInspectClose?.addEventListener("click", closeInspect);
   window.addEventListener("click", (event) => {
     if (!event.target.closest?.(".item-menu")) closeItemMenu();
+    if (!event.target.closest?.(".item-slot, .equipment-item, .resource-slot, .forge-item")) hideItemTooltip();
   });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeItemMenu();
       closeInspect();
       closePanel(ui.inventoryPanel);
+      closePanel(ui.forgePanel);
       closePanel(ui.characterPanel);
+    }
+    if ((event.key === "e" || event.key === "E") && snapshot?.forgeNearby && !isOverlayOpen()) {
+      event.preventDefault();
+      openForge();
     }
   });
 }
 
+function setInventoryTab(tab) {
+  inventoryTab = tab === "shards" ? "shards" : "equipment";
+  renderInventory();
+}
+
+function setForgeTab(tab) {
+  forgeTab = tab === "craft" ? "craft" : "refine";
+  renderForge();
+}
+
 function renderInventory() {
-  if (!ui.inventorySlots) return;
+  if (!ui.inventorySlots || !ui.resourceSlots) return;
+  ui.inventoryEquipmentTab?.classList.toggle("is-active", inventoryTab === "equipment");
+  ui.inventoryShardsTab?.classList.toggle("is-active", inventoryTab === "shards");
+  ui.equipmentSlots?.classList.toggle("hidden", inventoryTab !== "equipment");
+  ui.inventorySlots.classList.toggle("hidden", inventoryTab !== "equipment");
+  ui.resourceSlots.classList.toggle("hidden", inventoryTab !== "shards");
   const inventory = snapshot?.inventory || [];
   const size = snapshot?.inventorySize || 10;
   ui.inventorySlots.innerHTML = "";
@@ -1320,6 +1375,7 @@ function renderInventory() {
       slot.dataset.rarity = item.rarity;
       slot.innerHTML = itemMarkup(item);
       slot.title = `${item.name} - ${EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel}`;
+      bindItemTooltip(slot, item);
       slot.addEventListener("dblclick", () => sendItemAction("equipItem", item.uid));
       slot.addEventListener("contextmenu", (event) => {
         event.preventDefault();
@@ -1328,6 +1384,22 @@ function renderInventory() {
       bindLongPress(slot, item);
     }
     ui.inventorySlots.append(slot);
+  }
+  renderResourceInventory();
+}
+
+function renderResourceInventory() {
+  if (!ui.resourceSlots) return;
+  const resources = snapshot?.resources || [];
+  ui.resourceSlots.innerHTML = resources.length ? "" : `<p class="hint">No shards or fragments yet.</p>`;
+  for (const item of resources) {
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "resource-slot";
+    slot.dataset.rarity = item.rarity;
+    slot.innerHTML = resourceMarkup(item);
+    bindItemTooltip(slot, item);
+    ui.resourceSlots.append(slot);
   }
 }
 
@@ -1346,6 +1418,10 @@ function renderEquipment() {
       <span>${EQUIPMENT_SLOT_LABELS[slotId] || slotId}</span>
       <div class="equipment-item">${item ? itemMarkup(item) : `<em>${EQUIPMENT_SLOT_LABELS[slotId] || "Empty"}</em>`}</div>
     `;
+    if (item) {
+      const itemNode = slot.querySelector(".equipment-item");
+      bindItemTooltip(itemNode, item);
+    }
     ui.equipmentSlots.append(slot);
   }
 }
@@ -1354,7 +1430,15 @@ function itemMarkup(item) {
   return `
     <img src="${escapeHtml(item.icon)}" alt="" draggable="false" />
     <strong>${escapeHtml(item.name)}</strong>
-    <span>${escapeHtml(EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel || item.type)} - ${escapeHtml(item.rarity)}</span>
+    <span>${escapeHtml(EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel || item.type)} - ${escapeHtml(item.rarity)} - iLvl ${escapeHtml(item.itemLevel || 1)}</span>
+  `;
+}
+
+function resourceMarkup(item) {
+  return `
+    <img src="${escapeHtml(item.icon)}" alt="" draggable="false" />
+    <strong>${escapeHtml(item.name)}</strong>
+    <span>${escapeHtml(item.resourceKind)} x${escapeHtml(item.stack || 1)}</span>
   `;
 }
 
@@ -1402,10 +1486,204 @@ function inspectItem(item) {
   ui.itemInspectContent.innerHTML = `
     <img src="${escapeHtml(item.icon)}" alt="" draggable="false" />
     <h3>${escapeHtml(item.name)}</h3>
-    <p>${escapeHtml(EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel || item.type)} - ${escapeHtml(item.rarity)}</p>
-    <small>No effect yet.</small>
+    ${tooltipMarkup(item)}
   `;
   ui.itemInspect.classList.remove("hidden");
+}
+
+function bindItemTooltip(element, item, reason = "") {
+  if (!element || !item) return;
+  element.addEventListener("mouseenter", (event) => showItemTooltip(item, event.clientX, event.clientY, reason));
+  element.addEventListener("mousemove", (event) => moveItemTooltip(event.clientX, event.clientY));
+  element.addEventListener("mouseleave", hideItemTooltip);
+  element.addEventListener("focus", () => showItemTooltip(item, window.innerWidth / 2, window.innerHeight / 2, reason));
+  element.addEventListener("blur", hideItemTooltip);
+  element.addEventListener("touchstart", (event) => {
+    const touch = event.touches?.[0];
+    showItemTooltip(item, touch?.clientX || window.innerWidth / 2, touch?.clientY || window.innerHeight / 2, reason);
+  }, { passive: true });
+}
+
+function showItemTooltip(item, x, y, reason = "") {
+  if (!ui.itemTooltip) return;
+  ui.itemTooltip.dataset.rarity = item.rarity || "common";
+  ui.itemTooltip.innerHTML = tooltipMarkup(item, reason);
+  ui.itemTooltip.classList.remove("hidden");
+  moveItemTooltip(x, y);
+}
+
+function moveItemTooltip(x, y) {
+  if (!ui.itemTooltip || ui.itemTooltip.classList.contains("hidden")) return;
+  const rect = ui.itemTooltip.getBoundingClientRect();
+  const left = Math.min(window.innerWidth - rect.width - 12, Math.max(12, x + 18));
+  const top = Math.min(window.innerHeight - rect.height - 12, Math.max(12, y + 18));
+  ui.itemTooltip.style.left = `${left}px`;
+  ui.itemTooltip.style.top = `${top}px`;
+}
+
+function hideItemTooltip() {
+  ui.itemTooltip?.classList.add("hidden");
+}
+
+function tooltipMarkup(item, reason = "") {
+  if (item.type === "resource") {
+    return `
+      <h3>${escapeHtml(item.name)}</h3>
+      <p>${escapeHtml(capitalize(item.resourceKind))} - Stack ${escapeHtml(item.stack || 1)}</p>
+      <small>${escapeHtml(item.description || "")}</small>
+      ${reason ? `<small class="tooltip-warning">${escapeHtml(reason)}</small>` : ""}
+    `;
+  }
+  return `
+    <h3>${escapeHtml(item.name)}</h3>
+    <p>${escapeHtml(EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel || item.type)} - ${escapeHtml(item.rarity)} - Quality ${escapeHtml(item.quality || 0)}%</p>
+    ${itemStatsMarkup(item)}
+    ${reason ? `<small class="tooltip-warning">${escapeHtml(reason)}</small>` : ""}
+  `;
+}
+
+function openForge() {
+  if (!snapshot?.forgeNearby || !ui.forgePanel) return;
+  closeItemMenu();
+  closeInspect();
+  closePanel(ui.inventoryPanel);
+  ui.forgePanel.classList.remove("hidden");
+  setForgeTab(forgeTab);
+  renderForge();
+}
+
+function renderForge() {
+  if (!ui.forgePanel || ui.forgePanel.classList.contains("hidden")) return;
+  ui.forgeRefineTab?.classList.toggle("is-active", forgeTab === "refine");
+  ui.forgeCraftTab?.classList.toggle("is-active", forgeTab === "craft");
+  ui.forgeRefinePanel?.classList.toggle("hidden", forgeTab !== "refine");
+  ui.forgeCraftPanel?.classList.toggle("hidden", forgeTab !== "craft");
+  if (forgeTab === "refine") renderForgeRefine();
+  if (forgeTab === "craft") renderForgeCraft();
+}
+
+function forgeItems() {
+  const inventory = (snapshot?.inventory || []).map((item) => ({ item, source: "Bag" }));
+  const equipment = Object.entries(snapshot?.equipment || {})
+    .filter(([, item]) => item)
+    .map(([slot, item]) => ({ item, source: EQUIPMENT_SLOT_LABELS[slot] || slot }));
+  return [...equipment, ...inventory];
+}
+
+function renderForgeRefine() {
+  if (!ui.forgeFragments || !ui.forgeRefineDetails) return;
+  const fragments = (snapshot?.resources || []).filter((item) => item.resourceKind === "fragment");
+  ui.forgeFragments.innerHTML = fragments.length ? "" : `<p class="hint">No fragments to refine.</p>`;
+  for (const item of fragments) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "forge-item";
+    button.dataset.rarity = item.rarity;
+    button.disabled = (item.stack || 0) < 5;
+    button.innerHTML = `<img src="${escapeHtml(item.icon)}" alt="" draggable="false" /><span>Stack ${escapeHtml(item.stack || 0)} / 5</span><strong>${escapeHtml(item.name)}</strong>`;
+    bindItemTooltip(button, item, (item.stack || 0) < 5 ? "Requires 5 fragments" : "Click to refine into a full shard");
+    button.addEventListener("click", () => {
+      if ((item.stack || 0) >= 5) sendForgeConvertFragment(item.uid);
+    });
+    ui.forgeFragments.append(button);
+  }
+  ui.forgeRefineDetails.innerHTML = `
+    <strong>Refine Fragments</strong>
+    <p class="hint">Convert 5 fragments of the same rarity into a complete shard.</p>
+    <div class="forge-refine-rules">
+      <span>5 Magic Fragments -> Transmutation Shard</span>
+      <span>5 Rare Fragments -> Improvement Shard</span>
+      <span>5 Epic Fragments -> Ascension Shard</span>
+      <span>5 Legendary Fragments -> Legend Shard</span>
+    </div>
+  `;
+}
+
+function renderForgeCraft() {
+  if (!ui.forgeShards || !ui.forgeEquipment) return;
+  const shards = (snapshot?.resources || []).filter((item) => item.resourceKind === "shard");
+  const equipment = forgeItems();
+  if (!shards.some((item) => item.uid === selectedShardItemId)) selectedShardItemId = "";
+  const selectedShard = shards.find((item) => item.uid === selectedShardItemId) || null;
+  ui.forgeShards.innerHTML = shards.length ? "" : `<p class="hint">No shards available.</p>`;
+  for (const item of shards) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "forge-item resource-slot";
+    button.dataset.rarity = item.rarity;
+    button.classList.toggle("is-selected", item.uid === selectedShardItemId);
+    button.innerHTML = resourceMarkup(item);
+    bindItemTooltip(button, item, item.uid === selectedShardItemId ? "Selected shard" : "Right-click or tap to select");
+    const select = (event) => {
+      event.preventDefault();
+      selectedShardItemId = item.uid;
+      renderForgeCraft();
+    };
+    button.addEventListener("contextmenu", select);
+    button.addEventListener("click", select);
+    ui.forgeShards.append(button);
+  }
+  ui.forgeEquipment.innerHTML = equipment.length ? "" : `<p class="hint">No equipment available.</p>`;
+  for (const { item, source } of equipment) {
+    const compatibility = selectedShard ? canApplyShardClient(selectedShard, item) : { ok: true, reason: "Select a shard first" };
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "forge-item";
+    button.dataset.rarity = item.rarity;
+    button.classList.toggle("is-compatible", Boolean(selectedShard && compatibility.ok));
+    button.classList.toggle("is-incompatible", Boolean(selectedShard && !compatibility.ok));
+    button.innerHTML = `<img src="${escapeHtml(item.icon)}" alt="" draggable="false" /><span>${escapeHtml(source)}</span><strong>${escapeHtml(item.name)}</strong>`;
+    bindItemTooltip(button, item, selectedShard ? compatibility.reason : "Select a shard first");
+    button.addEventListener("click", () => {
+      if (selectedShard && compatibility.ok) sendForgeApplyShard(selectedShard, item);
+    });
+    ui.forgeEquipment.append(button);
+  }
+}
+
+function canApplyShardClient(shard, item) {
+  const shardId = shard?.resourceId;
+  if (!shardId) return { ok: false, reason: "Select a shard first" };
+  if (!item || item.type === "resource") return { ok: false, reason: "Select equipment" };
+  if (item.locked) return { ok: false, reason: "Item is permanently locked" };
+  const upgradeRequirements = { transmutation: "common", improvement: "magic", ascension: "rare", legend: "epic" };
+  if (upgradeRequirements[shardId]) {
+    return item.rarity === upgradeRequirements[shardId]
+      ? { ok: true, reason: "" }
+      : { ok: false, reason: `Requires a ${capitalize(upgradeRequirements[shardId])} item` };
+  }
+  const affixes = item.affixes || [];
+  const caps = { common: 0, magic: 2, rare: 4, epic: 6, legendary: 8 };
+  if (shardId === "exaltation" && affixes.length >= (caps[item.rarity] || 0)) return { ok: false, reason: "Item already has maximum affixes" };
+  if (shardId === "quality" && (item.quality || 0) >= 20) return { ok: false, reason: "Item already has maximum quality" };
+  if (["alteration", "divine", "purification", "locking"].includes(shardId) && affixes.length === 0) return { ok: false, reason: "Item has no affixes" };
+  if (shardId === "corruption" && item.corrupted) return { ok: false, reason: "Item is already corrupted" };
+  return { ok: true, reason: "" };
+}
+
+function sendForgeApplyShard(shard, item) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !shard || !item) return;
+  const firstAffix = (item.affixes || []).find((affix) => !affix.locked) || (item.affixes || [])[0];
+  ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: shard.uid, targetItemId: item.uid, affixId: firstAffix?.id || "" }));
+}
+
+function sendForgeConvertFragment(fragmentItemId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ t: "forgeConvertFragment", fragmentItemId }));
+}
+
+function itemStatsMarkup(item) {
+  const affixes = Array.isArray(item.affixes) ? item.affixes : [];
+  const powers = Array.isArray(item.uniquePowers) ? item.uniquePowers : [];
+  return `
+    <ul class="item-stats">
+      <li>${escapeHtml(item.mainStat?.label || "Stat")} +${escapeHtml(item.mainStatValue ?? item.mainStat?.value ?? 0)}</li>
+      ${affixes.map((affix) => `<li>${affix.locked ? "[L] " : ""}T${escapeHtml(affix.tier)} +${escapeHtml(affix.value)}${affix.percent ? "%" : ""} ${escapeHtml(affix.label)}</li>`).join("")}
+      ${powers.map((power) => `<li class="unique-power">${escapeHtml(power.label)}: +${escapeHtml(power.value)} ${escapeHtml(power.stat)}</li>`).join("")}
+      ${item.corrupted ? `<li class="corrupted">Corrupted</li>` : ""}
+      ${item.locked ? `<li class="corrupted">Permanently locked</li>` : ""}
+    </ul>
+  `;
 }
 
 function sendItemAction(type, itemId) {
@@ -1444,6 +1722,11 @@ function escapeHtml(value) {
     "\"": "&quot;",
     "'": "&#039;",
   }[char]));
+}
+
+function capitalize(value) {
+  const text = String(value || "");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
 
 function variantFor(x, y, count) {
@@ -1662,6 +1945,7 @@ function isOverlayOpen() {
   return Boolean(ui.startScreen && !ui.startScreen.classList.contains("hidden"))
     || Boolean(ui.deathScreen && !ui.deathScreen.classList.contains("hidden"))
     || Boolean(ui.inventoryPanel && !ui.inventoryPanel.classList.contains("hidden"))
+    || Boolean(ui.forgePanel && !ui.forgePanel.classList.contains("hidden"))
     || Boolean(ui.characterPanel && !ui.characterPanel.classList.contains("hidden"))
     || Boolean(ui.itemInspect && !ui.itemInspect.classList.contains("hidden"));
 }

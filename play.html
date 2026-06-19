@@ -37,20 +37,49 @@
               <img src="assets/generated-items/equipment-icon.png" alt="" draggable="false" />
             </button>
           </div>
+          <div id="forgeHint" class="forge-hint hidden">
+            <span>Press E to use the forge</span>
+            <button id="forgeHintButton" type="button">Forge</button>
+          </div>
         </div>
         <div id="inventoryPanel" class="game-panel inventory-panel hidden" role="dialog" aria-label="Inventory">
           <div class="inventory-header">
             <strong>Inventory</strong>
             <button id="inventoryClose" class="panel-close" type="button" aria-label="Close inventory">x</button>
           </div>
+          <div class="panel-tabs" role="tablist" aria-label="Inventory tabs">
+            <button id="inventoryEquipmentTab" type="button" class="is-active">Equipment</button>
+            <button id="inventoryShardsTab" type="button">Shards</button>
+          </div>
           <section class="inventory-core">
             <div id="equipmentSlots" class="equipment-slots"></div>
             <div id="inventorySlots" class="inventory-slots"></div>
+            <div id="resourceSlots" class="resource-slots hidden"></div>
             <div class="panel-gold"><span>Gold</span><strong id="inventoryGold">0</strong></div>
             <div class="inventory-footer">
               <span>Double click: equip</span>
               <span>Right click / long press: actions</span>
               <span>Esc: close</span>
+            </div>
+          </section>
+        </div>
+        <div id="forgePanel" class="game-panel forge-panel hidden" role="dialog" aria-label="Forge">
+          <div class="inventory-header">
+            <strong>Forge</strong>
+            <button id="forgeClose" class="panel-close" type="button" aria-label="Close forge">x</button>
+          </div>
+          <div class="panel-tabs" role="tablist" aria-label="Forge tabs">
+            <button id="forgeRefineTab" type="button" class="is-active">Refine</button>
+            <button id="forgeCraftTab" type="button">Craft</button>
+          </div>
+          <section class="forge-core">
+            <div id="forgeRefinePanel" class="forge-tab-panel forge-refine-panel">
+              <div id="forgeFragments" class="forge-items"></div>
+              <div id="forgeRefineDetails" class="forge-details"></div>
+            </div>
+            <div id="forgeCraftPanel" class="forge-tab-panel forge-craft-panel hidden">
+              <div id="forgeShards" class="forge-items"></div>
+              <div id="forgeEquipment" class="forge-items"></div>
             </div>
           </section>
         </div>
@@ -60,6 +89,7 @@
           <button id="itemInspectClose" class="panel-close" type="button" aria-label="Close item details">x</button>
           <div id="itemInspectContent"></div>
         </div>
+        <div id="itemTooltip" class="item-tooltip hidden" role="tooltip"></div>
         <div id="deathScreen" class="overlay hidden">
           <div class="panel">
             <p class="eyebrow">A grave has appeared</p>
