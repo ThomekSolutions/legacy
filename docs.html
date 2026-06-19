@@ -29,7 +29,8 @@
         <a href="#controls">Controls</a>
         <a href="#worlds">Worlds And Portals</a>
         <a href="#combat">Combat</a>
-        <a href="#loot">Loot And Progression</a>
+        <a href="#loot">Loot, Stats, And Progression</a>
+        <a href="#forge">Forge And Crafting</a>
         <a href="#death">Death And Legacy</a>
         <a href="#technical">Technical Notes</a>
       </aside>
@@ -80,8 +81,11 @@
                 <li>Move with <strong>WASD</strong>, <strong>ZQSD</strong>, or arrow keys.</li>
                 <li>Attack with left click or <strong>Space</strong>.</li>
                 <li>Attacks aim toward the mouse position.</li>
-                <li>Use the HUD buttons to open inventory and equipment.</li>
-                <li>Double-click an inventory item to equip it, or right-click it for equip, examine, and destroy actions.</li>
+                <li>Use the HUD buttons to open the inventory.</li>
+                <li>The inventory has two tabs: <strong>Equipment</strong> and <strong>Shards</strong>.</li>
+                <li>Hover an item to see a Diablo-style tooltip with stats, affixes, quality, and special states.</li>
+                <li>Double-click an equipment item to equip it, or right-click it for equip, inspect, and destroy actions.</li>
+                <li>When you are near the forge in Haven, press <strong>E</strong> to open it.</li>
               </ul>
             </div>
             <div>
@@ -91,6 +95,8 @@
                 <li>Use the right attack button or right-side touch area to attack.</li>
                 <li>The canvas disables browser gesture interference for play.</li>
                 <li>Use the HUD buttons to open panels, and long-press an item to open its action menu.</li>
+                <li>Tap an item to inspect it and see its full tooltip panel.</li>
+                <li>When the forge hint appears, tap <strong>Forge</strong> to open it.</li>
               </ul>
             </div>
           </div>
@@ -102,13 +108,14 @@
             Maps use 32-pixel tiles in an 80 by 80 world. Haven is the safe hub. Combat maps are procedurally carved paths and rooms using the current depth's biome.
           </p>
           <ul>
-            <li><strong>Haven:</strong> no monsters, portal at tile 40,36 leads to Depth 1.</li>
+            <li><strong>Haven:</strong> no monsters, portal at tile 40,42 leads to Depth 1.</li>
             <li><strong>Combat entry:</strong> each combat map places the return portal at tile 40,72.</li>
             <li><strong>Forward travel:</strong> depths below 100 place an exit portal deeper in the map.</li>
             <li><strong>Return travel:</strong> Depth 1 returns to Haven; deeper maps return to the previous combat depth.</li>
             <li><strong>Exact tile rule:</strong> a player warps only when their current tile is a portal tile.</li>
             <li><strong>Portal cooldown:</strong> after warping, the player has a 1.2 second portal cooldown.</li>
             <li><strong>Healing return:</strong> returning to Haven restores up to 30 HP without exceeding max HP.</li>
+            <li><strong>Forge access:</strong> Haven contains a forge near the hub forge building. You must stand close to it to refine fragments or craft with shards.</li>
           </ul>
           <p>
             Biomes rotate through Ruined Outskirts, Marsh Causeway, Grave Barrens, Wildwood Hollow, Ashen Keep, and Cinder Vault. Depth affects enemy count, enemy strength, loot quantity, and rare loot odds.
@@ -125,9 +132,10 @@
             <li>Base movement speed is <strong>248</strong> units per second.</li>
             <li>Marsh terrain slows player movement to <strong>176</strong> units per second.</li>
             <li>Player hitbox radius is <strong>6.5</strong>.</li>
-            <li>Attack cooldown is <strong>0.42 seconds</strong>.</li>
+            <li>Attack cooldown starts at <strong>0.42 seconds</strong> and is reduced by <strong>Attack Speed</strong>, down to a minimum of <strong>0.18 seconds</strong>.</li>
             <li>The attack shape is a rectangle with range <strong>39</strong> and half-width <strong>18</strong>.</li>
-            <li>Player damage is <strong>19 + level * 5 + power * 4</strong>.</li>
+            <li>Pickup Range also slightly extends melee reach.</li>
+            <li>Base player damage is <strong>19 + level * 5 + power * 4</strong>, then item stats add flat damage, damage percent, critical chance, critical damage, and situational bonuses.</li>
             <li>All enemies inside the attack rectangle can be hit by the same swing.</li>
           </ul>
           <p>
@@ -144,9 +152,9 @@
         </section>
 
         <section id="loot" class="doc-section">
-          <h2>Loot And Progression</h2>
+          <h2>Loot, Stats, And Progression</h2>
           <p>
-            Kills, gold, and temporary equipment are the main short-term progression systems. Power currently comes from level and legacy renown; dropped equipment has no stat effect yet.
+            Kills, gold, temporary equipment, shards, and fragments are the main short-term progression systems. Equipment now grants real stats, and crafting resources are visible inventory items stored in the <strong>Shards</strong> tab.
           </p>
           <ul>
             <li>Killing an enemy grants <strong>enemy level * 10</strong> XP.</li>
@@ -154,11 +162,82 @@
             <li>Level-up threshold is <strong>current level * 26</strong> XP.</li>
             <li>Leveling sets XP back to 0, increases level by 1, increases max HP by 16, fully heals the character, and adds 1 power.</li>
             <li>Enemy drops are private to the player who dealt the most damage to the killed monster.</li>
-            <li>Loot appears as a small bag with a rarity halo and is collected within 24 units if the bag has space.</li>
+            <li>Equipment drops appear as ground loot with a rarity halo and are collected automatically when you move within pickup range and have inventory space.</li>
+            <li>Shard and fragment drops are also private, but they merge into visible resource stacks and do not use equipment inventory slots.</li>
             <li>The inventory has <strong>10</strong> slots and equipment slots for helmet, chest, gloves, boots, and weapon.</li>
-            <li>Item rarities are common, magic, rare, epic, and legendary.</li>
-            <li>Enemy loot drop chance is <strong>clamp(0.04 + depth * 0.0004, 0.04, 0.08)</strong>.</li>
-            <li>Inventory, equipment, and gold belong only to the current life and disappear on death.</li>
+            <li>Item rarities are <strong>Common</strong>, <strong>Magic</strong>, <strong>Rare</strong>, <strong>Epic</strong>, and <strong>Legendary</strong>.</li>
+            <li>Rarity controls how many affixes an item can have: <strong>0 / 1-2 / 3-4 / 5-6 / 7-8</strong>.</li>
+            <li>Equipment drop chance is <strong>clamp(0.04 + depth * 0.0004, 0.04, 0.08)</strong>, then improved by <strong>Magic Find</strong>.</li>
+            <li>Fragment drop chance is <strong>clamp(0.12 + depth * 0.001, 0.12, 0.22)</strong>, then improved by <strong>Magic Find</strong>.</li>
+            <li>Shard drop chance is <strong>clamp(0.015 + depth * 0.0005, 0.015, 0.05)</strong>, then improved by <strong>Magic Find</strong>.</li>
+            <li>Gold gain is increased by <strong>Gold Find</strong>.</li>
+            <li>Inventory, equipped gear, gold, shards, and fragments belong only to the current life and disappear on death.</li>
+          </ul>
+          <h3>Equipment Stats</h3>
+          <p>
+            Every equipment piece has an item level, rarity, and main stat. Weapons roll <strong>Damage</strong> as their main stat. Helmets, chests, gloves, and boots roll <strong>Life</strong> as their main stat.
+          </p>
+          <ul>
+            <li><strong>Quality</strong> can reach 20%. Each quality point increases the main stat by 1%.</li>
+            <li><strong>Damage</strong>, <strong>Damage %</strong>, <strong>Critical Chance</strong>, <strong>Critical Damage</strong>, and <strong>Attack Speed</strong> raise offense.</li>
+            <li><strong>Life</strong>, <strong>Life %</strong>, <strong>Defense</strong>, <strong>Defense %</strong>, <strong>Shield</strong>, <strong>Life Regeneration</strong>, and <strong>Shield Regeneration</strong> raise survival.</li>
+            <li><strong>Movement Speed</strong> changes travel speed, <strong>Pickup Range</strong> improves loot vacuum and slightly increases attack reach, and <strong>Magic Find</strong> and <strong>Gold Find</strong> improve rewards.</li>
+            <li><strong>Boss Damage</strong> and <strong>Elite Damage</strong> are situational offensive affixes.</li>
+            <li><strong>Extra Durability</strong> is displayed on items for future durability systems.</li>
+          </ul>
+          <h3>Current Stat Rules</h3>
+          <ul>
+            <li>Base critical chance is <strong>5%</strong>.</li>
+            <li>Base critical damage bonus is <strong>50%</strong>.</li>
+            <li>Defense reduces incoming damage with a mitigation curve based on <strong>100 / (100 + defense)</strong>.</li>
+            <li>Maximum HP is based on character level, flat life, and life percent bonuses.</li>
+            <li>Life and shield regeneration are applied once per second.</li>
+          </ul>
+          <h3>Special Item States</h3>
+          <ul>
+            <li><strong>Corrupted</strong> items have been altered by a Corruption Shard and cannot be corrupted again.</li>
+            <li><strong>Locked</strong> items are permanently blocked from forge crafting.</li>
+            <li>Some legendary upgrades can add unique powers such as <strong>Ember Pact</strong>, <strong>Graveguard</strong>, <strong>Wayfinder</strong>, or <strong>Lucky Ash</strong>.</li>
+          </ul>
+        </section>
+
+        <section id="forge" class="doc-section">
+          <h2>Forge And Crafting</h2>
+          <p>
+            The forge is a Haven-only crafting station. Walk next to it to reveal the prompt, then open it with <strong>E</strong> on desktop or the <strong>Forge</strong> button on mobile. The forge has two tabs: <strong>Refine</strong> and <strong>Craft</strong>.
+          </p>
+          <h3>Refine</h3>
+          <ul>
+            <li>Destroying equipment gives fragments based on rarity: <strong>Magic</strong>, <strong>Rare</strong>, <strong>Epic</strong>, and <strong>Legendary</strong> items each produce one matching fragment.</li>
+            <li>Common items do not produce fragments.</li>
+            <li>In the forge, <strong>5 fragments</strong> convert into <strong>1 full shard</strong> of the matching upgrade family.</li>
+            <li>Magic Fragments become <strong>Transmutation Shards</strong>.</li>
+            <li>Rare Fragments become <strong>Improvement Shards</strong>.</li>
+            <li>Epic Fragments become <strong>Ascension Shards</strong>.</li>
+            <li>Legendary Fragments become <strong>Legend Shards</strong>.</li>
+          </ul>
+          <h3>Craft</h3>
+          <ul>
+            <li>The left side lists shard stacks. The right side lists equipped and carried equipment.</li>
+            <li>On desktop, right-click a shard to select it, then left-click a compatible item to apply it.</li>
+            <li>On mobile, tap a shard, then tap a compatible item.</li>
+            <li>Compatible items are highlighted. Incompatible items are greyed out and explain why in their tooltip.</li>
+            <li>Applying a shard consumes exactly one stack count and updates the item immediately.</li>
+          </ul>
+          <h3>Shard Effects</h3>
+          <ul>
+            <li><strong>Transmutation</strong>: upgrades a Common item to Magic.</li>
+            <li><strong>Improvement</strong>: upgrades a Magic item to Rare.</li>
+            <li><strong>Ascension</strong>: upgrades a Rare item to Epic.</li>
+            <li><strong>Legend</strong>: upgrades an Epic item to Legendary and can add a unique power.</li>
+            <li><strong>Chaos</strong>: rerolls all non-locked affixes while keeping the rarity.</li>
+            <li><strong>Alteration</strong>: rerolls one non-locked affix.</li>
+            <li><strong>Exaltation</strong>: adds one affix if the item still has room.</li>
+            <li><strong>Divine</strong>: rerolls numeric values without changing the affix list.</li>
+            <li><strong>Purification</strong>: removes one non-locked affix.</li>
+            <li><strong>Locking</strong>: protects one chosen affix from the next reroll.</li>
+            <li><strong>Corruption</strong>: can empower an item, add power, destroy it, or permanently lock it.</li>
+            <li><strong>Quality</strong>: adds 1% quality, up to 20% maximum.</li>
           </ul>
         </section>
 
@@ -184,7 +263,7 @@
             <li>The static client and WebSocket server run from <strong>server.js</strong>.</li>
             <li>The Phaser game client is loaded only by <strong>play.html</strong>.</li>
             <li>Server persistence is local JSON at <strong>data/legacy-state.json</strong>.</li>
-            <li>The browser keeps an account id in localStorage under <strong>legacy.accountId.v1</strong>.</li>
+            <li>The browser keeps a session token in localStorage under <strong>legacy.sessionToken.v1</strong>.</li>
             <li>The <strong>/api/legends</strong> endpoint exposes public records, recent graves, and relics.</li>
             <li>The Hall of Legends displays server max level, most kills, longest life, oldest dynasty, recent graves, and relics.</li>
           </ul>
