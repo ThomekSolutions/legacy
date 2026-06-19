@@ -13,53 +13,59 @@
     <main class="shell">
       <section class="game-area">
         <div id="game" role="img" aria-label="Legacy game canvas"></div>
+        <div id="gameHud" class="game-hud" aria-label="Character HUD">
+          <div class="hud-status">
+            <div class="hud-identity">
+              <strong id="dynastyName">-</strong>
+              <span id="areaStat">Haven</span>
+            </div>
+            <div class="hud-vitals">
+              <span id="levelStat">1</span>
+              <div class="hp-frame" aria-label="Health">
+                <div id="hpFill" class="hp-fill"></div>
+                <strong id="hpStat">100</strong>
+              </div>
+            </div>
+            <div class="hud-currencies">
+              <span>Gold <strong id="goldStat">0</strong></span>
+              <span>Renown <strong id="renownStat">0</strong></span>
+            </div>
+          </div>
+          <ol id="log" class="hud-log" aria-label="Game log"></ol>
+          <div class="hud-actions" aria-label="Game panels">
+            <button id="inventoryButton" class="hud-action hud-inventory-button" type="button" aria-label="Inventory" title="Inventory">
+              <img src="assets/generated-items/equipment-icon.png" alt="" draggable="false" />
+            </button>
+          </div>
+        </div>
+        <div id="inventoryPanel" class="game-panel inventory-panel hidden" role="dialog" aria-label="Inventory">
+          <div class="inventory-header">
+            <strong>Inventory</strong>
+            <button id="inventoryClose" class="panel-close" type="button" aria-label="Close inventory">x</button>
+          </div>
+          <section class="inventory-core">
+            <div id="equipmentSlots" class="equipment-slots"></div>
+            <div id="inventorySlots" class="inventory-slots"></div>
+            <div class="panel-gold"><span>Gold</span><strong id="inventoryGold">0</strong></div>
+            <div class="inventory-footer">
+              <span>Double click: equip</span>
+              <span>Right click / long press: actions</span>
+              <span>Esc: close</span>
+            </div>
+          </section>
+        </div>
+        <div id="characterPanel" class="hidden" aria-hidden="true"></div>
+        <div id="itemMenu" class="item-menu hidden" role="menu"></div>
+        <div id="itemInspect" class="item-inspect hidden" role="dialog" aria-label="Item details">
+          <button id="itemInspectClose" class="panel-close" type="button" aria-label="Close item details">x</button>
+          <div id="itemInspectContent"></div>
+        </div>
         <div id="deathScreen" class="overlay hidden">
           <div class="panel">
             <p class="eyebrow">A grave has appeared</p>
             <h1 id="deathTitle">Your heir awaits.</h1>
             <p id="deathSummary"></p>
-            <button id="newHeirButton" type="button">Create an heir</button>
-          </div>
-        </div>
-        <div id="startScreen" class="overlay">
-          <div class="panel">
-            <p class="eyebrow">Legacy V1 multiplayer</p>
-            <h1>One life. A world that remembers.</h1>
-            <div class="form-row">
-              <label for="heroName">Name</label>
-              <input id="heroName" maxlength="14" value="Kael" />
-            </div>
-            <div class="form-row">
-              <label for="houseName">House</label>
-              <input id="houseName" maxlength="18" value="Valen" />
-            </div>
-            <div class="creator-layout" aria-label="Character appearance">
-              <div class="character-preview" aria-label="Character preview">
-                <div id="creatorPreviewStage" class="preview-stage"></div>
-                <div id="previewModeTabs" class="preview-mode-tabs" aria-label="Preview animation">
-                  <button type="button" data-preview-mode="idle" class="is-active">Idle</button>
-                  <button type="button" data-preview-mode="walk">Walk</button>
-                  <button type="button" data-preview-mode="attack">Attack</button>
-                </div>
-              </div>
-              <div class="appearance-panel">
-                <div id="appearanceTabs" class="appearance-tabs" aria-label="Appearance categories"></div>
-                <div id="appearanceOptions" class="appearance-options"></div>
-              </div>
-            </div>
-            <select id="bodySelect" hidden></select>
-            <select id="skinSelect" hidden></select>
-            <select id="hairSelect" hidden></select>
-            <select id="armorSelect" hidden></select>
-            <select id="helmetSelect" hidden></select>
-            <select id="hatSelect" hidden></select>
-            <select id="weaponSelect" hidden></select>
-            <select id="shieldSelect" hidden></select>
-            <select id="capeSelect" hidden></select>
-            <select id="mountSelect" hidden></select>
-            <select id="petSelect" hidden></select>
-            <select id="auraSelect" hidden></select>
-            <button id="startButton" type="button">Enter the haven</button>
+            <button id="respawnButton" type="button">Return to the hub</button>
           </div>
         </div>
         <div id="mobileControls" class="mobile-controls" aria-hidden="true">
@@ -69,36 +75,6 @@
           <button id="mobileAttackButton" class="mobile-attack" type="button" aria-label="Attack"></button>
         </div>
       </section>
-
-      <aside class="sidebar">
-        <header>
-          <p class="eyebrow">House</p>
-          <h2 id="dynastyName">-</h2>
-        </header>
-
-        <section class="stat-grid" aria-label="Character stats">
-          <div class="wide-stat"><span>Area</span><strong id="areaStat">Haven</strong></div>
-          <div><span>Level</span><strong id="levelStat">1</strong></div>
-          <div><span>HP</span><strong id="hpStat">100</strong></div>
-          <div><span>Gold</span><strong id="goldStat">0</strong></div>
-          <div><span>Renown</span><strong id="renownStat">0</strong></div>
-        </section>
-
-        <section>
-          <h3>Log</h3>
-          <ol id="log" class="log"></ol>
-        </section>
-
-        <section>
-          <h3>Hall of Legends</h3>
-          <div id="legends" class="legends"></div>
-        </section>
-
-        <section>
-          <h3>Controls</h3>
-          <p class="hint">ZQSD/WASD to move. Left click or Space attacks toward the mouse. Portals lead from haven into deeper shared depths.</p>
-        </section>
-      </aside>
     </main>
 
     <script src="node_modules/phaser/dist/phaser.js"></script>

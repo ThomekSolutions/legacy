@@ -16,6 +16,18 @@ Then open:
 
 `http://localhost:3000`
 
+## Deploy On Render
+
+This repo includes a `render.yaml` Blueprint for Render.
+
+1. Push the repository to GitHub.
+2. In Render, create a new Blueprint from the repo.
+3. Set `PUBLIC_ORIGIN` to the deployed URL, for example `https://legacy.onrender.com`.
+4. Optionally set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` if bot verification is enabled.
+5. Deploy.
+
+The Blueprint mounts a persistent disk at `/var/data` and sets `DATA_DIR=/var/data`, so `legacy-state.json` survives deploys and restarts.
+
 ## Current Gameplay
 
 - Create a character and a House.

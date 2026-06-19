@@ -80,6 +80,8 @@
                 <li>Move with <strong>WASD</strong>, <strong>ZQSD</strong>, or arrow keys.</li>
                 <li>Attack with left click or <strong>Space</strong>.</li>
                 <li>Attacks aim toward the mouse position.</li>
+                <li>Use the HUD buttons to open inventory and equipment.</li>
+                <li>Double-click an inventory item to equip it, or right-click it for equip, examine, and destroy actions.</li>
               </ul>
             </div>
             <div>
@@ -88,6 +90,7 @@
                 <li>Use the left virtual joystick to move.</li>
                 <li>Use the right attack button or right-side touch area to attack.</li>
                 <li>The canvas disables browser gesture interference for play.</li>
+                <li>Use the HUD buttons to open panels, and long-press an item to open its action menu.</li>
               </ul>
             </div>
           </div>
@@ -143,18 +146,19 @@
         <section id="loot" class="doc-section">
           <h2>Loot And Progression</h2>
           <p>
-            Kills and loot are the main short-term progression systems. Power increases damage immediately, while level increases HP and damage.
+            Kills, gold, and temporary equipment are the main short-term progression systems. Power currently comes from level and legacy renown; dropped equipment has no stat effect yet.
           </p>
           <ul>
             <li>Killing an enemy grants <strong>enemy level * 10</strong> XP.</li>
             <li>Killing an enemy grants <strong>4 + enemy level</strong> gold immediately.</li>
             <li>Level-up threshold is <strong>current level * 26</strong> XP.</li>
             <li>Leveling sets XP back to 0, increases level by 1, increases max HP by 16, fully heals the character, and adds 1 power.</li>
-            <li>Loot pickups are collected within 24 units.</li>
-            <li>Common loot grants 5 to 26 plus depth scaling gold and 1 power.</li>
-            <li>Rare loot grants 35 plus depth scaling and random bonus gold, and gives 2 or more power at very deep depths.</li>
-            <li>Enemy loot drop chance is <strong>clamp(0.25 + depth * 0.0015, 0.25, 0.4)</strong>.</li>
-            <li>Rare loot chance is <strong>clamp(0.08 + depth * 0.0045, 0.08, 0.58)</strong>.</li>
+            <li>Enemy drops are private to the player who dealt the most damage to the killed monster.</li>
+            <li>Loot appears as a small bag with a rarity halo and is collected within 24 units if the bag has space.</li>
+            <li>The inventory has <strong>10</strong> slots and equipment slots for helmet, chest, gloves, boots, and weapon.</li>
+            <li>Item rarities are common, magic, rare, epic, and legendary.</li>
+            <li>Enemy loot drop chance is <strong>clamp(0.04 + depth * 0.0004, 0.04, 0.08)</strong>.</li>
+            <li>Inventory, equipment, and gold belong only to the current life and disappear on death.</li>
           </ul>
         </section>
 

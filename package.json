@@ -8,9 +8,14 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check src/game.js && node --check tools/generate-pixel-characters.js && node --check tools/verify-character-assets.js && node --check tools/generate-pixel-monsters.js && node --check tools/verify-monster-assets.js && node tools/verify-character-assets.js && node tools/verify-monster-assets.js",
+    "check": "node --check server.js && node --check src/game.js && node --check src/landing.js && node --check tools/generate-pixel-characters.js && node --check tools/verify-character-assets.js && node --check tools/generate-pixel-monsters.js && node --check tools/verify-monster-assets.js && node --check tools/generate-pixel-items.js && node --check tools/test-inventory-flow.js && node --check tools/test-auth-flow.js && node --check tools/test-warp-restore-flow.js && node --check tools/audit-inventory-ui.js && node tools/verify-character-assets.js && node tools/verify-monster-assets.js",
     "generate:characters": "node tools/generate-pixel-characters.js",
     "generate:monsters": "node tools/generate-pixel-monsters.js",
+    "generate:items": "node tools/generate-pixel-items.js",
+    "test:inventory": "node tools/test-inventory-flow.js",
+    "test:auth": "node tools/test-auth-flow.js",
+    "test:warp": "node tools/test-warp-restore-flow.js",
+    "test:inventory-ui": "node tools/audit-inventory-ui.js",
     "verify:characters": "node tools/verify-character-assets.js",
     "verify:monsters": "node tools/verify-monster-assets.js"
   },

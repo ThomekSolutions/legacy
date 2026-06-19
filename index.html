@@ -21,7 +21,7 @@
         <a href="#systems">Systems</a>
         <a href="docs.html">Docs</a>
       </nav>
-      <a class="nav-play" href="play.html">Play Now</a>
+      <a id="navPlayLink" class="nav-play is-disabled" href="play.html" aria-disabled="true">Play Now</a>
     </header>
 
     <main>
@@ -59,8 +59,21 @@
           <h1 id="hero-title">Legacy</h1>
           <p class="hero-text">One life. A dynasty that survives you. A shared world where graves, relics, and records become the story everyone inherits.</p>
           <div class="hero-actions" aria-label="Main actions">
-            <a class="button-primary" href="play.html">Play Now</a>
+            <button id="connectWalletButton" class="button-primary" type="button">Connect Wallet</button>
+            <a id="heroPlayLink" class="button-secondary is-disabled" href="play.html" aria-disabled="true">Play</a>
             <a class="button-secondary" href="docs.html">Read Docs</a>
+          </div>
+          <div class="wallet-panel" aria-live="polite">
+            <strong id="walletStatus">Connect your Solana wallet to play.</strong>
+            <div id="walletList" class="wallet-list"></div>
+            <form id="nameForm" class="wallet-name-form hidden">
+              <label for="characterNameInput">Character name</label>
+              <div>
+                <input id="characterNameInput" maxlength="16" autocomplete="off" />
+                <button type="submit">Save</button>
+              </div>
+            </form>
+            <div id="turnstileSlot"></div>
           </div>
         </div>
 
@@ -156,10 +169,11 @@
         <p class="eyebrow">Ready for the next heir?</p>
         <h2>Step into the haven and see what your house remembers.</h2>
         <div class="hero-actions">
-          <a class="button-primary" href="play.html">Play Legacy</a>
+          <a id="footerPlayLink" class="button-primary is-disabled" href="play.html" aria-disabled="true">Play Legacy</a>
           <a class="button-secondary" href="docs.html">Open Documentation</a>
         </div>
       </section>
     </main>
+    <script defer src="src/landing.js"></script>
   </body>
 </html>

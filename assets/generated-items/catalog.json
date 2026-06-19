@@ -1,0 +1,126 @@
+{
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "items": [
+    {
+      "id": "patched-cap",
+      "type": "helmet",
+      "label": "Patched Cap",
+      "icon": "assets/generated-items/patched-cap.png"
+    },
+    {
+      "id": "rusted-sallet",
+      "type": "helmet",
+      "label": "Rusted Sallet",
+      "icon": "assets/generated-items/rusted-sallet.png"
+    },
+    {
+      "id": "grave-crown",
+      "type": "helmet",
+      "label": "Grave Crown",
+      "icon": "assets/generated-items/grave-crown.png"
+    },
+    {
+      "id": "ember-hood",
+      "type": "helmet",
+      "label": "Ember Hood",
+      "icon": "assets/generated-items/ember-hood.png"
+    },
+    {
+      "id": "travelers-vest",
+      "type": "chest",
+      "label": "Traveler's Vest",
+      "icon": "assets/generated-items/travelers-vest.png"
+    },
+    {
+      "id": "ringmail-vest",
+      "type": "chest",
+      "label": "Ringmail Vest",
+      "icon": "assets/generated-items/ringmail-vest.png"
+    },
+    {
+      "id": "warden-coat",
+      "type": "chest",
+      "label": "Warden Coat",
+      "icon": "assets/generated-items/warden-coat.png"
+    },
+    {
+      "id": "ashen-cuirass",
+      "type": "chest",
+      "label": "Ashen Cuirass",
+      "icon": "assets/generated-items/ashen-cuirass.png"
+    },
+    {
+      "id": "linen-wraps",
+      "type": "gloves",
+      "label": "Linen Wraps",
+      "icon": "assets/generated-items/linen-wraps.png"
+    },
+    {
+      "id": "iron-grips",
+      "type": "gloves",
+      "label": "Iron Grips",
+      "icon": "assets/generated-items/iron-grips.png"
+    },
+    {
+      "id": "grave-gauntlets",
+      "type": "gloves",
+      "label": "Grave Gauntlets",
+      "icon": "assets/generated-items/grave-gauntlets.png"
+    },
+    {
+      "id": "ember-claws",
+      "type": "gloves",
+      "label": "Ember Claws",
+      "icon": "assets/generated-items/ember-claws.png"
+    },
+    {
+      "id": "mud-boots",
+      "type": "boots",
+      "label": "Mud Boots",
+      "icon": "assets/generated-items/mud-boots.png"
+    },
+    {
+      "id": "scout-boots",
+      "type": "boots",
+      "label": "Scout Boots",
+      "icon": "assets/generated-items/scout-boots.png"
+    },
+    {
+      "id": "tomb-greaves",
+      "type": "boots",
+      "label": "Tomb Greaves",
+      "icon": "assets/generated-items/tomb-greaves.png"
+    },
+    {
+      "id": "cinder-treads",
+      "type": "boots",
+      "label": "Cinder Treads",
+      "icon": "assets/generated-items/cinder-treads.png"
+    },
+    {
+      "id": "chipped-sword",
+      "type": "weapon",
+      "label": "Chipped Sword",
+      "icon": "assets/generated-items/chipped-sword.png"
+    },
+    {
+      "id": "hunter-axe",
+      "type": "weapon",
+      "label": "Hunter Axe",
+      "icon": "assets/generated-items/hunter-axe.png"
+    },
+    {
+      "id": "grave-mace",
+      "type": "weapon",
+      "label": "Grave Mace",
+      "icon": "assets/generated-items/grave-mace.png"
+    },
+    {
+      "id": "ember-blade",
+      "type": "weapon",
+      "label": "Ember Blade",
+      "icon": "assets/generated-items/ember-blade.png"
+    }
+  ]
+}

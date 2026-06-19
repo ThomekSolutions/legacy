@@ -7,147 +7,15 @@
     "attack": 6
   },
   "renderOrder": [
-    "mount",
-    "pet",
-    "cape",
     "body",
     "skin",
     "hair",
     "armor",
-    "hat",
     "helmet",
     "weapon",
-    "shield",
-    "aura"
+    "shield"
   ],
   "slots": {
-    "mount": {
-      "label": "Mount",
-      "default": "none",
-      "items": [
-        {
-          "id": "none",
-          "label": "None",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {}
-        },
-        {
-          "id": "horseBrown",
-          "label": "Brown horse",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/mount-horseBrown-idle.png",
-            "walk": "assets/generated-characters/mount-horseBrown-walk.png",
-            "attack": "assets/generated-characters/mount-horseBrown-attack.png"
-          }
-        },
-        {
-          "id": "horseGrey",
-          "label": "Grey horse",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/mount-horseGrey-idle.png",
-            "walk": "assets/generated-characters/mount-horseGrey-walk.png",
-            "attack": "assets/generated-characters/mount-horseGrey-attack.png"
-          }
-        },
-        {
-          "id": "blackHorse",
-          "label": "Black horse",
-          "rarity": "rare",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/mount-blackHorse-idle.png",
-            "walk": "assets/generated-characters/mount-blackHorse-walk.png",
-            "attack": "assets/generated-characters/mount-blackHorse-attack.png"
-          }
-        },
-        {
-          "id": "emberStag",
-          "label": "Ember stag",
-          "rarity": "epic",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/mount-emberStag-idle.png",
-            "walk": "assets/generated-characters/mount-emberStag-walk.png",
-            "attack": "assets/generated-characters/mount-emberStag-attack.png"
-          }
-        }
-      ]
-    },
-    "pet": {
-      "label": "Pet",
-      "default": "none",
-      "items": [
-        {
-          "id": "none",
-          "label": "None",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {}
-        }
-      ]
-    },
-    "cape": {
-      "label": "Cape",
-      "default": "red",
-      "items": [
-        {
-          "id": "none",
-          "label": "None",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {}
-        },
-        {
-          "id": "red",
-          "label": "Red cape",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/cape-red-idle.png",
-            "walk": "assets/generated-characters/cape-red-walk.png",
-            "attack": "assets/generated-characters/cape-red-attack.png"
-          }
-        },
-        {
-          "id": "blue",
-          "label": "Blue cape",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/cape-blue-idle.png",
-            "walk": "assets/generated-characters/cape-blue-walk.png",
-            "attack": "assets/generated-characters/cape-blue-attack.png"
-          }
-        },
-        {
-          "id": "green",
-          "label": "Green cape",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/cape-green-idle.png",
-            "walk": "assets/generated-characters/cape-green-walk.png",
-            "attack": "assets/generated-characters/cape-green-attack.png"
-          }
-        },
-        {
-          "id": "tornBlack",
-          "label": "Torn black cape",
-          "rarity": "rare",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/cape-tornBlack-idle.png",
-            "walk": "assets/generated-characters/cape-tornBlack-walk.png",
-            "attack": "assets/generated-characters/cape-tornBlack-attack.png"
-          }
-        }
-      ]
-    },
     "body": {
       "label": "Body",
       "default": "human",
@@ -303,63 +171,6 @@
         }
       ]
     },
-    "hat": {
-      "label": "Hat",
-      "default": "travelerHat",
-      "items": [
-        {
-          "id": "none",
-          "label": "None",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {}
-        },
-        {
-          "id": "travelerHat",
-          "label": "Traveler hat",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/hat-travelerHat-idle.png",
-            "walk": "assets/generated-characters/hat-travelerHat-walk.png",
-            "attack": "assets/generated-characters/hat-travelerHat-attack.png"
-          }
-        },
-        {
-          "id": "witchHat",
-          "label": "Witch hat",
-          "rarity": "rare",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/hat-witchHat-idle.png",
-            "walk": "assets/generated-characters/hat-witchHat-walk.png",
-            "attack": "assets/generated-characters/hat-witchHat-attack.png"
-          }
-        },
-        {
-          "id": "crown",
-          "label": "Old crown",
-          "rarity": "epic",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/hat-crown-idle.png",
-            "walk": "assets/generated-characters/hat-crown-walk.png",
-            "attack": "assets/generated-characters/hat-crown-attack.png"
-          }
-        },
-        {
-          "id": "christmasHat",
-          "label": "Christmas hat",
-          "rarity": "rare",
-          "defaultUnlocked": true,
-          "spritesheets": {
-            "idle": "assets/generated-characters/hat-christmasHat-idle.png",
-            "walk": "assets/generated-characters/hat-christmasHat-walk.png",
-            "attack": "assets/generated-characters/hat-christmasHat-attack.png"
-          }
-        }
-      ]
-    },
     "helmet": {
       "label": "Helmet",
       "default": "none",
@@ -486,19 +297,6 @@
           }
         }
       ]
-    },
-    "aura": {
-      "label": "Aura",
-      "default": "none",
-      "items": [
-        {
-          "id": "none",
-          "label": "None",
-          "rarity": "common",
-          "defaultUnlocked": true,
-          "spritesheets": {}
-        }
-      ]
     }
   },
   "layers": {
@@ -577,28 +375,6 @@
         "attack": "assets/generated-characters/helmet-hood-attack.png"
       }
     },
-    "hat": {
-      "travelerHat": {
-        "idle": "assets/generated-characters/hat-travelerHat-idle.png",
-        "walk": "assets/generated-characters/hat-travelerHat-walk.png",
-        "attack": "assets/generated-characters/hat-travelerHat-attack.png"
-      },
-      "witchHat": {
-        "idle": "assets/generated-characters/hat-witchHat-idle.png",
-        "walk": "assets/generated-characters/hat-witchHat-walk.png",
-        "attack": "assets/generated-characters/hat-witchHat-attack.png"
-      },
-      "crown": {
-        "idle": "assets/generated-characters/hat-crown-idle.png",
-        "walk": "assets/generated-characters/hat-crown-walk.png",
-        "attack": "assets/generated-characters/hat-crown-attack.png"
-      },
-      "christmasHat": {
-        "idle": "assets/generated-characters/hat-christmasHat-idle.png",
-        "walk": "assets/generated-characters/hat-christmasHat-walk.png",
-        "attack": "assets/generated-characters/hat-christmasHat-attack.png"
-      }
-    },
     "weapon": {
       "sword": {
         "idle": "assets/generated-characters/weapon-sword-idle.png",
@@ -626,50 +402,6 @@
         "idle": "assets/generated-characters/shield-tower-idle.png",
         "walk": "assets/generated-characters/shield-tower-walk.png",
         "attack": "assets/generated-characters/shield-tower-attack.png"
-      }
-    },
-    "cape": {
-      "red": {
-        "idle": "assets/generated-characters/cape-red-idle.png",
-        "walk": "assets/generated-characters/cape-red-walk.png",
-        "attack": "assets/generated-characters/cape-red-attack.png"
-      },
-      "blue": {
-        "idle": "assets/generated-characters/cape-blue-idle.png",
-        "walk": "assets/generated-characters/cape-blue-walk.png",
-        "attack": "assets/generated-characters/cape-blue-attack.png"
-      },
-      "green": {
-        "idle": "assets/generated-characters/cape-green-idle.png",
-        "walk": "assets/generated-characters/cape-green-walk.png",
-        "attack": "assets/generated-characters/cape-green-attack.png"
-      },
-      "tornBlack": {
-        "idle": "assets/generated-characters/cape-tornBlack-idle.png",
-        "walk": "assets/generated-characters/cape-tornBlack-walk.png",
-        "attack": "assets/generated-characters/cape-tornBlack-attack.png"
-      }
-    },
-    "mount": {
-      "horseBrown": {
-        "idle": "assets/generated-characters/mount-horseBrown-idle.png",
-        "walk": "assets/generated-characters/mount-horseBrown-walk.png",
-        "attack": "assets/generated-characters/mount-horseBrown-attack.png"
-      },
-      "horseGrey": {
-        "idle": "assets/generated-characters/mount-horseGrey-idle.png",
-        "walk": "assets/generated-characters/mount-horseGrey-walk.png",
-        "attack": "assets/generated-characters/mount-horseGrey-attack.png"
-      },
-      "blackHorse": {
-        "idle": "assets/generated-characters/mount-blackHorse-idle.png",
-        "walk": "assets/generated-characters/mount-blackHorse-walk.png",
-        "attack": "assets/generated-characters/mount-blackHorse-attack.png"
-      },
-      "emberStag": {
-        "idle": "assets/generated-characters/mount-emberStag-idle.png",
-        "walk": "assets/generated-characters/mount-emberStag-walk.png",
-        "attack": "assets/generated-characters/mount-emberStag-attack.png"
       }
     }
   }

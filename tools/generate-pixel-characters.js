@@ -3,6 +3,7 @@ const path = require("path");
 const zlib = require("zlib");
 
 const OUT_DIR = path.join(__dirname, "..", "assets", "generated-characters");
+const EXTRA_DIR = path.join(__dirname, "..", "assets", "generated-character-extras");
 const FRAME = 100;
 const ANIMS = {
   idle: 6,
@@ -10,7 +11,10 @@ const ANIMS = {
   attack: 6,
 };
 
-const RENDER_ORDER = ["mount", "pet", "cape", "body", "skin", "hair", "armor", "hat", "helmet", "weapon", "shield", "aura"];
+const PLAYABLE_RENDER_ORDER = ["body", "skin", "hair", "armor", "helmet", "weapon", "shield"];
+const EXTRA_RENDER_ORDER = ["mount", "pet", "cape", "hat", "aura"];
+const RENDER_ORDER = [...PLAYABLE_RENDER_ORDER, ...EXTRA_RENDER_ORDER];
+const EXTRA_SLOTS = new Set(EXTRA_RENDER_ORDER);
 const slotLabels = {
   body: "Body",
   skin: "Skin",
@@ -74,25 +78,41 @@ const layers = [
 ];
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(EXTRA_DIR, { recursive: true });
 
 const catalog = {
   frameWidth: FRAME,
   frameHeight: FRAME,
   animations: ANIMS,
-  renderOrder: RENDER_ORDER,
-  slots: Object.fromEntries(RENDER_ORDER.map((slot) => [slot, {
+  renderOrder: PLAYABLE_RENDER_ORDER,
+  slots: Object.fromEntries(PLAYABLE_RENDER_ORDER.map((slot) => [slot, {
     label: slotLabels[slot] || slot,
     default: slotDefaults[slot] || "none",
     items: slot === "body" ? [] : [{ id: "none", label: "None", rarity: "common", defaultUnlocked: true, spritesheets: {} }],
   }])),
   layers: {},
 };
+const extraCatalog = {
+  frameWidth: FRAME,
+  frameHeight: FRAME,
+  animations: ANIMS,
+  renderOrder: EXTRA_RENDER_ORDER,
+  slots: Object.fromEntries(EXTRA_RENDER_ORDER.map((slot) => [slot, {
+    label: slotLabels[slot] || slot,
+    default: slotDefaults[slot] || "none",
+    items: [{ id: "none", label: "None", rarity: "common", defaultUnlocked: true, spritesheets: {} }],
+  }])),
+  layers: {},
+};
 
 for (const entry of layers) {
   const { slot: type, id: variant, label, rarity, draw } = entry;
-  catalog.layers[type] ??= {};
-  catalog.layers[type][variant] = {};
-  catalog.slots[type] ??= { label: slotLabels[type] || type, default: "none", items: [{ id: "none", label: "None", rarity: "common", defaultUnlocked: true, spritesheets: {} }] };
+  const targetCatalog = EXTRA_SLOTS.has(type) ? extraCatalog : catalog;
+  const targetDir = EXTRA_SLOTS.has(type) ? EXTRA_DIR : OUT_DIR;
+  const targetPath = EXTRA_SLOTS.has(type) ? "assets/generated-character-extras" : "assets/generated-characters";
+  targetCatalog.layers[type] ??= {};
+  targetCatalog.layers[type][variant] = {};
+  targetCatalog.slots[type] ??= { label: slotLabels[type] || type, default: "none", items: [{ id: "none", label: "None", rarity: "common", defaultUnlocked: true, spritesheets: {} }] };
   const catalogItem = { id: variant, label, rarity, defaultUnlocked: true, spritesheets: {} };
   for (const [anim, frames] of Object.entries(ANIMS)) {
     const sheet = new ImageData(FRAME * frames, FRAME);
@@ -102,15 +122,16 @@ for (const entry of layers) {
       blit(sheet, frameImage, frame * FRAME, 0);
     }
     const filename = `${type}-${variant}-${anim}.png`;
-    fs.writeFileSync(path.join(OUT_DIR, filename), encodePng(sheet));
-    catalog.layers[type][variant][anim] = `assets/generated-characters/${filename}`;
-    catalogItem.spritesheets[anim] = `assets/generated-characters/${filename}`;
+    fs.writeFileSync(path.join(targetDir, filename), encodePng(sheet));
+    targetCatalog.layers[type][variant][anim] = `${targetPath}/${filename}`;
+    catalogItem.spritesheets[anim] = `${targetPath}/${filename}`;
   }
-  catalog.slots[type].items.push(catalogItem);
+  targetCatalog.slots[type].items.push(catalogItem);
 }
 
 fs.writeFileSync(path.join(OUT_DIR, "catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`);
-console.log(`Generated ${layers.length * Object.keys(ANIMS).length} pixel-art spritesheets in ${OUT_DIR}`);
+fs.writeFileSync(path.join(EXTRA_DIR, "catalog.json"), `${JSON.stringify(extraCatalog, null, 2)}\n`);
+console.log(`Generated ${layers.length * Object.keys(ANIMS).length} pixel-art spritesheets in ${OUT_DIR} and ${EXTRA_DIR}`);
 
 function item(slot, id, label, rarity, draw) {
   return { slot, id, label, rarity, draw };

@@ -1,26 +1,7 @@
 const ui = {
   startScreen: document.querySelector("#startScreen"),
   deathScreen: document.querySelector("#deathScreen"),
-  startButton: document.querySelector("#startButton"),
-  newHeirButton: document.querySelector("#newHeirButton"),
-  heroName: document.querySelector("#heroName"),
-  houseName: document.querySelector("#houseName"),
-  bodySelect: document.querySelector("#bodySelect"),
-  skinSelect: document.querySelector("#skinSelect"),
-  hairSelect: document.querySelector("#hairSelect"),
-  armorSelect: document.querySelector("#armorSelect"),
-  helmetSelect: document.querySelector("#helmetSelect"),
-  hatSelect: document.querySelector("#hatSelect"),
-  weaponSelect: document.querySelector("#weaponSelect"),
-  shieldSelect: document.querySelector("#shieldSelect"),
-  capeSelect: document.querySelector("#capeSelect"),
-  mountSelect: document.querySelector("#mountSelect"),
-  petSelect: document.querySelector("#petSelect"),
-  auraSelect: document.querySelector("#auraSelect"),
-  creatorPreviewStage: document.querySelector("#creatorPreviewStage"),
-  previewModeTabs: document.querySelector("#previewModeTabs"),
-  appearanceTabs: document.querySelector("#appearanceTabs"),
-  appearanceOptions: document.querySelector("#appearanceOptions"),
+  respawnButton: document.querySelector("#respawnButton"),
   deathTitle: document.querySelector("#deathTitle"),
   deathSummary: document.querySelector("#deathSummary"),
   dynastyName: document.querySelector("#dynastyName"),
@@ -29,8 +10,20 @@ const ui = {
   hp: document.querySelector("#hpStat"),
   gold: document.querySelector("#goldStat"),
   renown: document.querySelector("#renownStat"),
+  hpFill: document.querySelector("#hpFill"),
   log: document.querySelector("#log"),
-  legends: document.querySelector("#legends"),
+  inventoryButton: document.querySelector("#inventoryButton"),
+  inventoryPanel: document.querySelector("#inventoryPanel"),
+  characterPanel: document.querySelector("#characterPanel"),
+  inventoryClose: document.querySelector("#inventoryClose"),
+  characterClose: document.querySelector("#characterClose"),
+  inventorySlots: document.querySelector("#inventorySlots"),
+  equipmentSlots: document.querySelector("#equipmentSlots"),
+  inventoryGold: document.querySelector("#inventoryGold"),
+  itemMenu: document.querySelector("#itemMenu"),
+  itemInspect: document.querySelector("#itemInspect"),
+  itemInspectContent: document.querySelector("#itemInspectContent"),
+  itemInspectClose: document.querySelector("#itemInspectClose"),
   gameArea: document.querySelector(".game-area"),
   mobileControls: document.querySelector("#mobileControls"),
   moveStick: document.querySelector("#moveStick"),
@@ -41,10 +34,13 @@ const ui = {
 const TILE = 32;
 const WORLD_W = 80;
 const WORLD_H = 80;
-const ACCOUNT_KEY = "legacy.accountId.v1";
+const SESSION_KEY = "legacy.sessionToken.v1";
 const SEND_RATE_MS = 16;
+const INTERPOLATION_DELAY_MS = 110;
+const SNAPSHOT_BUFFER_LIMIT = 8;
 const WORLD_PIXEL_W = WORLD_W * TILE;
 const WORLD_PIXEL_H = WORLD_H * TILE;
+const CLIENT_PLAYER_HITBOX_RADIUS = 6.5;
 const CHARACTER_FRAME = 100;
 const CHARACTER_SCALE = 0.59;
 const ENEMY_SCALE = 0.588;
@@ -52,11 +48,25 @@ const MOUNTED_BODY_VISIBLE_HEIGHT = 57;
 const UI_FONT = '"Fondamento", "Trebuchet MS", Georgia, serif';
 const CATALOG_URL = "assets/generated-characters/catalog.json";
 const MONSTER_CATALOG_URL = "assets/generated-monsters/catalog.json";
-const DEFAULT_RENDER_ORDER = ["mount", "pet", "cape", "body", "skin", "hair", "armor", "hat", "helmet", "weapon", "shield", "aura"];
+const DEFAULT_RENDER_ORDER = ["body", "skin", "hair", "armor", "helmet", "weapon", "shield"];
 const DEFAULT_ATTACK_SPEC = {
   shape: "rectangle",
   range: 39,
   halfWidth: 18,
+};
+const EQUIPMENT_SLOT_LABELS = {
+  helmet: "Helmet",
+  chest: "Chest",
+  gloves: "Gloves",
+  boots: "Boots",
+  weapon: "Weapon",
+};
+const RARITY_COLORS = {
+  common: "#d8d2bd",
+  magic: "#5fa8ff",
+  rare: "#f2cf5b",
+  epic: "#b66dff",
+  legendary: "#ff8a2a",
 };
 const CHARACTER_ANIMS = {
   idle: 6,
@@ -71,18 +81,16 @@ const DEFAULT_MONSTER_CATALOG = {
 };
 let characterCatalog = null;
 let monsterCatalog = null;
-let previewMode = "idle";
-let previewFrame = 0;
-let previewTimer = null;
 let game = null;
 
 let ws = null;
 let selfId = null;
-let accountId = getAccountId();
+let sessionToken = localStorage.getItem(SESSION_KEY) || "";
 let snapshot = null;
 let worldTiles = null;
 let meta = null;
 let legends = null;
+let snapshotBuffer = [];
 let statusText = "offline";
 let hasStarted = false;
 let lastInputSent = "";
@@ -119,6 +127,8 @@ class LegacyScene extends Phaser.Scene {
     this.eventObjects = null;
     this.worldId = null;
     this.lastInputAt = 0;
+    this.lastFrameAt = 0;
+    this.frameDeltaSeconds = 0;
     this.worldBuilt = false;
   }
 
@@ -177,6 +187,9 @@ class LegacyScene extends Phaser.Scene {
   }
 
   update(time) {
+    this.frameDeltaSeconds = this.lastFrameAt ? Phaser.Math.Clamp((time - this.lastFrameAt) / 1000, 0, 0.05) : 0;
+    this.lastFrameAt = time;
+
     if (!snapshot || !snapshot.tiles) {
       this.drawStatusOverlay();
       return;
@@ -188,8 +201,8 @@ class LegacyScene extends Phaser.Scene {
     this.updatePortal();
     this.updateWorldEvent(time);
     this.updateLoot();
-    this.updateEnemies();
-    this.updatePlayers();
+    this.updateEnemies(time);
+    this.updatePlayers(time);
     this.updateDamageTexts();
     this.updateCamera();
     this.sendInput(time);
@@ -264,6 +277,26 @@ class LegacyScene extends Phaser.Scene {
     for (let i = 0; i < 4; i += 1) this.makeWaterTexture(`water-${i}`, i);
     for (let i = 0; i < 2; i += 1) this.makeBridgeTexture(`bridge-${i}`, i);
     for (let i = 0; i < 2; i += 1) this.makePortalTexture(`portal-${i}`, i);
+    this.makeLootBagTexture();
+  }
+
+  makeLootBagTexture() {
+    if (this.textures.exists("loot-bag")) return;
+    const gfx = this.make.graphics({ x: 0, y: 0, add: false });
+    gfx.fillStyle(0x000000, 0.28);
+    gfx.fillEllipse(16, 24, 20, 6);
+    gfx.fillStyle(0x4b2f19, 1);
+    gfx.fillRect(9, 12, 14, 12);
+    gfx.fillStyle(0x8f6230, 1);
+    gfx.fillRect(11, 10, 10, 13);
+    gfx.fillStyle(0xd0a05a, 1);
+    gfx.fillRect(12, 9, 8, 3);
+    gfx.fillStyle(0x25170e, 1);
+    gfx.fillRect(10, 14, 12, 2);
+    gfx.fillStyle(0xf4d476, 0.85);
+    gfx.fillRect(15, 15, 2, 2);
+    gfx.generateTexture("loot-bag", 32, 32);
+    gfx.destroy();
   }
 
   makeTileTexture(key, type, colors, seed) {
@@ -675,24 +708,95 @@ class LegacyScene extends Phaser.Scene {
     this.eventObjects.core.setPosition(event.x, event.y);
   }
 
-  updatePlayers() {
+  updatePlayers(time) {
     const seen = new Set();
     for (const player of snapshot.players) {
       seen.add(player.id);
       const entity = this.ensureCharacter(this.entities, player.id, true);
-      this.updateCharacterEntity(entity, player, player.id === selfId);
+      const self = player.id === selfId;
+      const renderSource = self ? this.predictedSelfSource(entity, player) : interpolatedEntity("players", player.id, time) || player;
+      this.updateCharacterEntity(entity, renderSource, self);
     }
     this.destroyMissing(this.entities, seen);
   }
 
-  updateEnemies() {
+  updateEnemies(time) {
     const seen = new Set();
     for (const enemy of snapshot.enemies) {
       seen.add(enemy.id);
       const entity = this.ensureCharacter(this.enemyEntities, enemy.id, false);
-      this.updateCharacterEntity(entity, enemy, false);
+      this.updateCharacterEntity(entity, interpolatedEntity("enemies", enemy.id, time) || enemy, false);
     }
     this.destroyMissing(this.enemyEntities, seen);
+  }
+
+  predictedSelfSource(entity, serverPlayer) {
+    if (!entity.initialized || this.frameDeltaSeconds <= 0) return serverPlayer;
+
+    const input = this.currentMoveVector();
+    const len = Math.hypot(input.dx, input.dy);
+    const dx = len > 0.01 ? input.dx / len : 0;
+    const dy = len > 0.01 ? input.dy / len : 0;
+    const tile = this.tileAtWorld(entity.x, entity.y);
+    const speed = tile === "marsh" ? 176 : 248;
+    const next = this.moveClientEntity(
+      entity.x,
+      entity.y,
+      entity.x + dx * speed * this.frameDeltaSeconds,
+      entity.y + dy * speed * this.frameDeltaSeconds,
+      CLIENT_PLAYER_HITBOX_RADIUS,
+    );
+
+    const error = Math.hypot(serverPlayer.x - next.x, serverPlayer.y - next.y);
+    const correction = error > 120 ? 1 : len > 0.01 ? 0.08 : 0.18;
+    const x = Phaser.Math.Linear(next.x, serverPlayer.x, correction);
+    const y = Phaser.Math.Linear(next.y, serverPlayer.y, correction);
+
+    return {
+      ...serverPlayer,
+      x,
+      y,
+      moving: len > 0.01 || serverPlayer.moving,
+      facing: Math.abs(dx) > 0.05 ? (dx > 0 ? 1 : -1) : serverPlayer.facing,
+    };
+  }
+
+  currentMoveVector() {
+    const keyboardDx = Number(this.keys.left.isDown || this.keys.a.isDown || this.keys.q.isDown) * -1 + Number(this.keys.right.isDown || this.keys.d.isDown);
+    const keyboardDy = Number(this.keys.up.isDown || this.keys.w.isDown || this.keys.z.isDown) * -1 + Number(this.keys.down.isDown || this.keys.s.isDown);
+    return {
+      dx: keyboardDx || mobileInput.dx,
+      dy: keyboardDy || mobileInput.dy,
+    };
+  }
+
+  moveClientEntity(x, y, nx, ny, radius) {
+    const next = { x, y };
+    const clampedX = Phaser.Math.Clamp(nx, TILE, WORLD_PIXEL_W - TILE);
+    const clampedY = Phaser.Math.Clamp(ny, TILE, WORLD_PIXEL_H - TILE);
+    if (this.isWalkableAt(clampedX, y, radius)) next.x = clampedX;
+    if (this.isWalkableAt(next.x, clampedY, radius)) next.y = clampedY;
+    return next;
+  }
+
+  isWalkableAt(x, y, radius) {
+    return [
+      [x, y],
+      [x - radius, y - radius],
+      [x + radius, y - radius],
+      [x - radius, y + radius],
+      [x + radius, y + radius],
+    ].every(([px, py]) => !this.isBlockedMovementTile(this.tileAtWorld(px, py)));
+  }
+
+  tileAtWorld(x, y) {
+    const tx = Phaser.Math.Clamp(Math.floor(x / TILE), 0, WORLD_W - 1);
+    const ty = Phaser.Math.Clamp(Math.floor(y / TILE), 0, WORLD_H - 1);
+    return snapshot?.tiles?.[ty]?.[tx] || "wall";
+  }
+
+  isBlockedMovementTile(tile) {
+    return tile === "wall" || tile === "forest" || tile === "water";
   }
 
   ensureCharacter(collection, id, player) {
@@ -726,7 +830,7 @@ class LegacyScene extends Phaser.Scene {
     entity.x += (source.x - entity.x) * lerp;
     entity.y += (source.y - entity.y) * lerp;
     const appearance = normalizeAppearance(source.appearance);
-    const mounted = entity.player && appearance.mount !== "none";
+    const mounted = entity.player && appearance.mount && appearance.mount !== "none";
     const visualY = entity.y;
     const action = source.attackCd > 0.12 ? "attack" : source.moving ? "walk" : "idle";
     const body = appearance.body || catalogSlotDefault("body");
@@ -746,7 +850,7 @@ class LegacyScene extends Phaser.Scene {
       this.updateAttackZone(entity, source, self);
       this.updatePaperDollLayers(entity, appearance, source, visualY, action);
     }
-    entity.name.setPosition(entity.x, entity.y - (mounted ? 44 : 34)).setText(entity.player ? (self ? "You" : `${source.name} ${source.house}`) : "");
+    entity.name.setPosition(entity.x, entity.y - (mounted ? 44 : 34)).setText(entity.player ? (self ? "You" : source.name) : "");
     entity.name.setColor(self ? "#f0d27b" : "#c8d7f0");
     entity.barBg.setPosition(entity.x, entity.y - (mounted ? 36 : 26));
     entity.bar.setPosition(entity.x - 19, entity.y - (mounted ? 36 : 26)).setSize(38 * Phaser.Math.Clamp(source.hp / source.maxHp, 0, 1), 4);
@@ -816,9 +920,18 @@ class LegacyScene extends Phaser.Scene {
       seen.add(item.id);
       let loot = this.lootEntities.get(item.id);
       if (!loot) {
-        loot = this.add.rectangle(item.x, item.y, 10, 10, item.rare ? 0xd6b24d : 0xb4c27d, 1).setDepth(9);
+        const halo = this.add.graphics();
+        const bag = this.add.image(0, 0, "loot-bag").setScale(0.62);
+        loot = this.add.container(item.x, item.y, [halo, bag]).setDepth(9);
+        loot.halo = halo;
         this.lootEntities.set(item.id, loot);
       }
+      const color = Phaser.Display.Color.HexStringToColor(rarityColor(item.rarity)).color;
+      loot.halo.clear();
+      loot.halo.fillStyle(color, 0.24);
+      loot.halo.fillCircle(0, 3, 15);
+      loot.halo.lineStyle(2, color, 0.82);
+      loot.halo.strokeCircle(0, 3, 12);
       loot.setPosition(item.x, item.y);
     }
     for (const [id, loot] of this.lootEntities.entries()) {
@@ -900,17 +1013,14 @@ class LegacyScene extends Phaser.Scene {
     const self = getSelf();
     if (!self) return;
     this.lastInputAt = time;
-    const keyboardDx = Number(this.keys.left.isDown || this.keys.a.isDown || this.keys.q.isDown) * -1 + Number(this.keys.right.isDown || this.keys.d.isDown);
-    const keyboardDy = Number(this.keys.up.isDown || this.keys.w.isDown || this.keys.z.isDown) * -1 + Number(this.keys.down.isDown || this.keys.s.isDown);
+    const move = this.currentMoveVector();
     const pointer = this.input.activePointer;
     const mobileAimPoint = getMobileAimWorldPoint(this);
     const worldPoint = mobileAimPoint || this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const dx = keyboardDx || mobileInput.dx;
-    const dy = keyboardDy || mobileInput.dy;
     const input = {
       t: "input",
-      dx,
-      dy,
+      dx: move.dx,
+      dy: move.dy,
       attack: mobileInput.attack || (!mobileInput.enabled && pointer.isDown) || this.keys.space.isDown,
       angle: Math.atan2(worldPoint.y - self.y, worldPoint.x - self.x),
     };
@@ -957,6 +1067,9 @@ const config = {
 };
 
 async function boot() {
+  const session = await requireSession();
+  if (!session) return;
+  meta = session.profile;
   try {
     const response = await fetch(CATALOG_URL);
     if (!response.ok) throw new Error(`Unable to load ${CATALOG_URL}`);
@@ -973,20 +1086,40 @@ async function boot() {
     console.warn(error);
     monsterCatalog = DEFAULT_MONSTER_CATALOG;
   }
-  setupAppearanceCreator();
   game = new Phaser.Game(config);
+  setupGamePanels();
   setupMobileControls();
+  connect();
   updateSidebar();
 }
 
-function connect(name, house, appearance) {
+async function requireSession() {
+  if (!sessionToken) {
+    location.replace("index.html");
+    return null;
+  }
+  try {
+    const response = await fetch("/api/session", {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.profile || result.profile.needsName) throw new Error("Session incomplete");
+    return result;
+  } catch {
+    localStorage.removeItem(SESSION_KEY);
+    location.replace("index.html");
+    return null;
+  }
+}
+
+function connect() {
   statusText = "connecting";
   const protocol = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${protocol}://${location.host}/ws`);
 
   ws.addEventListener("open", () => {
     statusText = "online";
-    ws.send(JSON.stringify({ t: "hello", accountId, name, house, appearance }));
+    ws.send(JSON.stringify({ t: "hello", sessionToken }));
     pushLog("Connected to the Legacy server.");
   });
 
@@ -994,9 +1127,13 @@ function connect(name, house, appearance) {
     const msg = JSON.parse(event.data);
     if (msg.t === "welcome") {
       selfId = msg.id;
-      accountId = msg.account;
       meta = msg.meta;
-      localStorage.setItem(ACCOUNT_KEY, accountId);
+      return;
+    }
+
+    if (msg.t === "authError") {
+      localStorage.removeItem(SESSION_KEY);
+      location.replace("index.html");
       return;
     }
 
@@ -1004,9 +1141,11 @@ function connect(name, house, appearance) {
       selfId = msg.selfId;
       if (msg.snapshot.tiles) {
         worldTiles = msg.snapshot.tiles;
+        snapshotBuffer = [];
         if (gameScene) gameScene.worldBuilt = false;
       }
       snapshot = { ...msg.snapshot, tiles: worldTiles };
+      pushSnapshot(snapshot);
       meta = msg.meta;
       legends = msg.legends;
       updateSidebar();
@@ -1017,6 +1156,10 @@ function connect(name, house, appearance) {
       meta = msg.meta;
       ui.deathTitle.textContent = `${msg.grave.name} has died.`;
       ui.deathSummary.textContent = `Level ${msg.grave.level}, ${msg.grave.kills} kills, survived ${msg.grave.lifeSeconds}s. Cause: ${msg.grave.cause}.`;
+      closePanel(ui.inventoryPanel);
+      closePanel(ui.characterPanel);
+      closeItemMenu();
+      closeInspect();
       ui.deathScreen.classList.remove("hidden");
       pushLog("A new grave has been written into the server history.");
       updateSidebar();
@@ -1026,7 +1169,7 @@ function connect(name, house, appearance) {
     if (msg.t === "revived") {
       meta = msg.meta;
       ui.deathScreen.classList.add("hidden");
-      pushLog("An heir takes up the road.");
+      pushLog("You return to the hub.");
     }
   });
 
@@ -1034,123 +1177,6 @@ function connect(name, house, appearance) {
     statusText = "offline";
     pushLog("Connection lost. Reload the page or restart the server.");
   });
-}
-
-function setupAppearanceCreator() {
-  buildHiddenSelects();
-  buildAppearanceTabs();
-  bindPreviewModeTabs();
-  startPreviewAnimation();
-}
-
-function buildHiddenSelects() {
-  for (const slot of catalogRenderOrder()) {
-    const select = ui[`${slot}Select`];
-    if (!select) continue;
-    select.innerHTML = "";
-    for (const item of catalogSlot(slot).items) {
-      const option = document.createElement("option");
-      option.value = item.id;
-      option.textContent = item.label;
-      select.append(option);
-    }
-    select.value = catalogSlotDefault(slot);
-  }
-}
-
-function buildAppearanceTabs() {
-  if (!ui.appearanceTabs || !ui.appearanceOptions) return;
-  const groups = [
-    { id: "body", label: "Body", slots: ["skin", "hair"] },
-    { id: "gear", label: "Gear", slots: ["armor", "helmet", "weapon", "shield"] },
-    { id: "cosmetics", label: "Cosmetics", slots: ["hat", "cape", "aura", "pet"] },
-    { id: "mount", label: "Mount", slots: ["mount"] },
-  ];
-  ui.appearanceTabs.innerHTML = "";
-  for (const group of groups) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = group.label;
-    button.dataset.group = group.id;
-    button.addEventListener("click", () => renderAppearanceGroup(group, groups));
-    ui.appearanceTabs.append(button);
-  }
-  renderAppearanceGroup(groups[0], groups);
-  refreshCreatorPreview();
-}
-
-function renderAppearanceGroup(group, groups) {
-  for (const button of ui.appearanceTabs.querySelectorAll("button")) button.classList.toggle("is-active", button.dataset.group === group.id);
-  ui.appearanceOptions.innerHTML = "";
-  for (const slot of group.slots) {
-    const slotData = catalogSlot(slot);
-    if (!slotData.items.length) continue;
-    for (const item of slotData.items) {
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "cosmetic-card";
-      card.dataset.slot = slot;
-      card.dataset.value = item.id;
-      card.dataset.rarity = item.rarity || "common";
-      card.innerHTML = `<strong>${item.label}</strong><span>${slotData.label} · ${item.rarity || "common"}</span>`;
-      card.addEventListener("click", () => {
-        const select = ui[`${slot}Select`];
-        if (select) select.value = item.id;
-        if (slot === "helmet" && item.id !== "none" && ui.hatSelect) ui.hatSelect.value = "none";
-        refreshAppearanceCards();
-        refreshCreatorPreview();
-      });
-      ui.appearanceOptions.append(card);
-    }
-  }
-  refreshAppearanceCards();
-}
-
-function refreshAppearanceCards() {
-  for (const card of ui.appearanceOptions?.querySelectorAll(".cosmetic-card") || []) {
-    const select = ui[`${card.dataset.slot}Select`];
-    card.classList.toggle("is-selected", select?.value === card.dataset.value);
-  }
-}
-
-function bindPreviewModeTabs() {
-  for (const button of ui.previewModeTabs?.querySelectorAll("button") || []) {
-    button.addEventListener("click", () => {
-      previewMode = button.dataset.previewMode || "idle";
-      previewFrame = 0;
-      for (const item of ui.previewModeTabs.querySelectorAll("button")) item.classList.toggle("is-active", item === button);
-      refreshCreatorPreview();
-    });
-  }
-}
-
-function startPreviewAnimation() {
-  if (previewTimer) clearInterval(previewTimer);
-  previewTimer = setInterval(() => {
-    previewFrame = (previewFrame + 1) % (CHARACTER_ANIMS[previewMode] || 1);
-    refreshCreatorPreview();
-  }, 150);
-}
-
-function refreshCreatorPreview() {
-  if (!ui.creatorPreviewStage) return;
-  const appearance = normalizeAppearance(getSelectedAppearance());
-  ui.creatorPreviewStage.innerHTML = "";
-  for (const slot of catalogRenderOrder()) {
-    const variant = slot === "hat" && appearance.helmet !== "none" ? "none" : appearance[slot];
-    if (!variant || variant === "none") continue;
-    const item = catalogSlot(slot).items.find((candidate) => candidate.id === variant);
-    const src = item?.spritesheets?.[previewMode];
-    if (!src) continue;
-    const layer = document.createElement("div");
-    const frames = CHARACTER_ANIMS[previewMode] || 1;
-    layer.className = "preview-layer";
-    if (slot === "body" && appearance.mount !== "none") layer.classList.add("is-mounted-body");
-    layer.style.backgroundImage = `url("${src}")`;
-    layer.style.backgroundSize = `${frames * 200}px 200px`;
-    layer.style.backgroundPosition = `${-previewFrame * 200}px 0`;
-    ui.creatorPreviewStage.append(layer);
-  }
 }
 
 function fallbackCharacterCatalog() {
@@ -1162,6 +1188,11 @@ function fallbackCharacterCatalog() {
     slots: {
       body: { label: "Body", default: "human", items: [{ id: "human", label: "Human", rarity: "common", spritesheets: { idle: "assets/generated-characters/body-human-idle.png", walk: "assets/generated-characters/body-human-walk.png", attack: "assets/generated-characters/body-human-attack.png" } }] },
       armor: { label: "Armor", default: "leather", items: [{ id: "none", label: "None", rarity: "common", spritesheets: {} }, { id: "leather", label: "Leather", rarity: "common", spritesheets: { idle: "assets/generated-characters/armor-leather-idle.png", walk: "assets/generated-characters/armor-leather-walk.png", attack: "assets/generated-characters/armor-leather-attack.png" } }] },
+      skin: { label: "Skin", default: "pale", items: [{ id: "pale", label: "Pale", rarity: "common", spritesheets: { idle: "assets/generated-characters/skin-pale-idle.png", walk: "assets/generated-characters/skin-pale-walk.png", attack: "assets/generated-characters/skin-pale-attack.png" } }] },
+      hair: { label: "Hair", default: "short", items: [{ id: "short", label: "Short", rarity: "common", spritesheets: { idle: "assets/generated-characters/hair-short-idle.png", walk: "assets/generated-characters/hair-short-walk.png", attack: "assets/generated-characters/hair-short-attack.png" } }] },
+      helmet: { label: "Helmet", default: "none", items: [{ id: "none", label: "None", rarity: "common", spritesheets: {} }] },
+      weapon: { label: "Weapon", default: "sword", items: [{ id: "sword", label: "Sword", rarity: "common", spritesheets: { idle: "assets/generated-characters/weapon-sword-idle.png", walk: "assets/generated-characters/weapon-sword-walk.png", attack: "assets/generated-characters/weapon-sword-attack.png" } }] },
+      shield: { label: "Shield", default: "round", items: [{ id: "round", label: "Round", rarity: "common", spritesheets: { idle: "assets/generated-characters/shield-round-idle.png", walk: "assets/generated-characters/shield-round-walk.png", attack: "assets/generated-characters/shield-round-attack.png" } }] },
     },
   };
 }
@@ -1170,49 +1201,230 @@ function getSelf() {
   return snapshot?.players.find((player) => player.id === selfId) || null;
 }
 
+function pushSnapshot(nextSnapshot) {
+  const receivedAt = performance.now();
+  snapshotBuffer.push({ receivedAt, snapshot: nextSnapshot });
+  if (snapshotBuffer.length > SNAPSHOT_BUFFER_LIMIT) {
+    snapshotBuffer = snapshotBuffer.slice(snapshotBuffer.length - SNAPSHOT_BUFFER_LIMIT);
+  }
+}
+
+function interpolatedEntity(collectionName, id, time) {
+  if (snapshotBuffer.length < 2) return null;
+  const targetTime = time - INTERPOLATION_DELAY_MS;
+  let before = null;
+  let after = null;
+  for (const entry of snapshotBuffer) {
+    if (entry.snapshot.id !== snapshot?.id) continue;
+    if (entry.receivedAt <= targetTime) before = entry;
+    if (entry.receivedAt >= targetTime) {
+      after = entry;
+      break;
+    }
+  }
+  if (!before || !after || before === after) return null;
+
+  const from = findEntity(before.snapshot, collectionName, id);
+  const to = findEntity(after.snapshot, collectionName, id);
+  if (!from || !to) return null;
+
+  const span = Math.max(1, after.receivedAt - before.receivedAt);
+  const amount = Phaser.Math.Clamp((targetTime - before.receivedAt) / span, 0, 1);
+  return {
+    ...to,
+    x: Phaser.Math.Linear(from.x, to.x, amount),
+    y: Phaser.Math.Linear(from.y, to.y, amount),
+    attackCd: Phaser.Math.Linear(from.attackCd || 0, to.attackCd || 0, amount),
+  };
+}
+
+function findEntity(sourceSnapshot, collectionName, id) {
+  return sourceSnapshot?.[collectionName]?.find((entity) => entity.id === id) || null;
+}
+
 function getTile(x, y) {
   if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return "wall";
   return snapshot?.tiles?.[y]?.[x] || "wall";
 }
 
-function getAccountId() {
-  let id = localStorage.getItem(ACCOUNT_KEY);
-  if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    localStorage.setItem(ACCOUNT_KEY, id);
-  }
-  return id;
-}
-
 function updateSidebar() {
   const self = getSelf();
-  ui.dynastyName.textContent = meta?.dynasty ? `House ${meta.dynasty} Gen. ${meta.generation}` : "-";
+  ui.dynastyName.textContent = self ? self.name : meta?.characterName || "-";
   ui.area.textContent = snapshot?.name || "Haven";
-  ui.level.textContent = self?.level ?? meta?.records?.maxLevel ?? 1;
+  ui.level.textContent = `Lvl ${self?.level ?? meta?.records?.maxLevel ?? 1}`;
   ui.hp.textContent = self ? `${self.hp}/${self.maxHp}` : "-";
+  if (ui.hpFill) ui.hpFill.style.width = self ? `${Math.max(0, Math.min(100, (self.hp / self.maxHp) * 100))}%` : "0%";
   ui.gold.textContent = self?.gold ?? 0;
   ui.renown.textContent = meta?.renown ?? 0;
-  ui.log.innerHTML = logs.map((entry) => `<li>${entry}</li>`).join("");
-
-  const records = legends?.records;
-  const cards = [];
-  if (records) {
-    cards.push(`<div class="legend-card">Server: lvl. ${records.maxLevel}, ${records.mostKills} kills, ${records.longestLife}s</div>`);
-    cards.push(`<div class="legend-card">Oldest dynasty: ${records.oldestDynasty.dynasty} Gen. ${records.oldestDynasty.generation}</div>`);
-  }
-  for (const grave of legends?.graves ?? []) {
-    cards.push(`<div class="legend-card">${grave.name}, lvl. ${grave.level}<br>Death: ${grave.cause}, ${grave.lifeSeconds}s</div>`);
-  }
-  for (const relic of legends?.relics ?? []) {
-    cards.push(`<div class="legend-card">${relic.name}<br>${relic.kills} kills</div>`);
-  }
-  ui.legends.innerHTML = cards.join("");
+  if (ui.inventoryGold) ui.inventoryGold.textContent = self?.gold ?? 0;
+  ui.log.innerHTML = logs.slice(0, 4).map((entry) => `<li>${escapeHtml(entry)}</li>`).join("");
+  renderInventory();
+  renderEquipment();
 }
 
 function pushLog(text) {
   logs.unshift(text);
   logs = logs.slice(0, 8);
   updateSidebar();
+}
+
+function setupGamePanels() {
+  ui.inventoryButton?.addEventListener("click", () => togglePanel(ui.inventoryPanel));
+  ui.inventoryClose?.addEventListener("click", () => closePanel(ui.inventoryPanel));
+  ui.characterClose?.addEventListener("click", () => closePanel(ui.characterPanel));
+  ui.itemInspectClose?.addEventListener("click", closeInspect);
+  window.addEventListener("click", (event) => {
+    if (!event.target.closest?.(".item-menu")) closeItemMenu();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeItemMenu();
+      closeInspect();
+      closePanel(ui.inventoryPanel);
+      closePanel(ui.characterPanel);
+    }
+  });
+}
+
+function renderInventory() {
+  if (!ui.inventorySlots) return;
+  const inventory = snapshot?.inventory || [];
+  const size = snapshot?.inventorySize || 10;
+  ui.inventorySlots.innerHTML = "";
+  for (let i = 0; i < size; i += 1) {
+    const item = inventory[i] || null;
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "item-slot";
+    slot.dataset.index = String(i);
+    if (item) {
+      slot.dataset.rarity = item.rarity;
+      slot.innerHTML = itemMarkup(item);
+      slot.title = `${item.name} - ${EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel}`;
+      slot.addEventListener("dblclick", () => sendItemAction("equipItem", item.uid));
+      slot.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        openItemMenu(item, event.clientX, event.clientY);
+      });
+      bindLongPress(slot, item);
+    }
+    ui.inventorySlots.append(slot);
+  }
+}
+
+function renderEquipment() {
+  if (!ui.equipmentSlots) return;
+  const equipment = snapshot?.equipment || {};
+  const slots = snapshot?.equipmentSlots || Object.keys(EQUIPMENT_SLOT_LABELS);
+  ui.equipmentSlots.innerHTML = "";
+  for (const slotId of slots) {
+    const item = equipment[slotId];
+    const slot = document.createElement("div");
+    slot.className = `equipment-slot equipment-slot--${slotId}`;
+    slot.dataset.slot = slotId;
+    if (item) slot.dataset.rarity = item.rarity;
+    slot.innerHTML = `
+      <span>${EQUIPMENT_SLOT_LABELS[slotId] || slotId}</span>
+      <div class="equipment-item">${item ? itemMarkup(item) : `<em>${EQUIPMENT_SLOT_LABELS[slotId] || "Empty"}</em>`}</div>
+    `;
+    ui.equipmentSlots.append(slot);
+  }
+}
+
+function itemMarkup(item) {
+  return `
+    <img src="${escapeHtml(item.icon)}" alt="" draggable="false" />
+    <strong>${escapeHtml(item.name)}</strong>
+    <span>${escapeHtml(EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel || item.type)} - ${escapeHtml(item.rarity)}</span>
+  `;
+}
+
+function bindLongPress(element, item) {
+  let timer = null;
+  const clear = () => {
+    if (timer) window.clearTimeout(timer);
+    timer = null;
+  };
+  element.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse") return;
+    timer = window.setTimeout(() => openItemMenu(item, event.clientX, event.clientY), 520);
+  });
+  element.addEventListener("pointerup", clear);
+  element.addEventListener("pointercancel", clear);
+  element.addEventListener("pointerleave", clear);
+}
+
+function openItemMenu(item, x, y) {
+  if (!ui.itemMenu) return;
+  ui.itemMenu.innerHTML = "";
+  const actions = [
+    ["Equip", () => sendItemAction("equipItem", item.uid)],
+    ["Inspect", () => inspectItem(item)],
+    ["Destroy", () => sendItemAction("destroyItem", item.uid)],
+  ];
+  for (const [label, action] of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", () => {
+      closeItemMenu();
+      action();
+    });
+    ui.itemMenu.append(button);
+  }
+  ui.itemMenu.style.left = `${Math.min(x, window.innerWidth - 170)}px`;
+  ui.itemMenu.style.top = `${Math.min(y, window.innerHeight - 150)}px`;
+  ui.itemMenu.classList.remove("hidden");
+}
+
+function inspectItem(item) {
+  if (!ui.itemInspect || !ui.itemInspectContent) return;
+  ui.itemInspect.dataset.rarity = item.rarity;
+  ui.itemInspectContent.innerHTML = `
+    <img src="${escapeHtml(item.icon)}" alt="" draggable="false" />
+    <h3>${escapeHtml(item.name)}</h3>
+    <p>${escapeHtml(EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel || item.type)} - ${escapeHtml(item.rarity)}</p>
+    <small>No effect yet.</small>
+  `;
+  ui.itemInspect.classList.remove("hidden");
+}
+
+function sendItemAction(type, itemId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !itemId) return;
+  ws.send(JSON.stringify({ t: type, itemId }));
+}
+
+function togglePanel(panel) {
+  if (!panel) return;
+  panel.classList.toggle("hidden");
+  closeItemMenu();
+}
+
+function closePanel(panel) {
+  panel?.classList.add("hidden");
+}
+
+function closeItemMenu() {
+  ui.itemMenu?.classList.add("hidden");
+}
+
+function closeInspect() {
+  ui.itemInspect?.classList.add("hidden");
+}
+
+function rarityColor(rarity) {
+  const serverRarity = snapshot?.rarities?.find((item) => item.id === rarity);
+  return serverRarity?.color || RARITY_COLORS[rarity] || RARITY_COLORS.common;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#039;",
+  }[char]));
 }
 
 function variantFor(x, y, count) {
@@ -1290,54 +1502,6 @@ function normalizeAppearance(value) {
   return Object.fromEntries(catalogRenderOrder().map((slot) => [slot, catalogAllows(slot, source[slot]) ? source[slot] : catalogSlotDefault(slot)]));
 }
 
-function getAppearanceColors(appearance) {
-  const armor = {
-    none: 0x000000,
-    leather: 0x8b5c34,
-    iron: 0xb8bbb5,
-    dark: 0x303437,
-  };
-  const helmet = {
-    none: 0x000000,
-    ironCap: 0xb8bbb5,
-    horned: 0x8f8d83,
-    hood: 0x323a34,
-  };
-  const weapon = {
-    none: 0x000000,
-    sword: 0xc9c7bb,
-    axe: 0xb8bbb5,
-    staff: 0x8d6136,
-  };
-  const shield = {
-    none: 0x000000,
-    round: 0x8c5f33,
-    tower: 0x7f8580,
-  };
-  const cape = {
-    none: 0x000000,
-    red: 0x9d2f35,
-    blue: 0x365d96,
-    green: 0x476d3c,
-  };
-  const mount = {
-    none: 0x000000,
-    horseBrown: 0x6b4b2e,
-    horseGrey: 0x8a8b83,
-  };
-  return {
-    armor: armor[appearance.armor] ?? armor.leather,
-    helmet: helmet[appearance.helmet] ?? helmet.ironCap,
-    weapon: weapon[appearance.weapon] ?? weapon.sword,
-    shield: shield[appearance.shield] ?? shield.round,
-    cape: cape[appearance.cape] ?? cape.red,
-    mount: mount[appearance.mount] ?? mount.none,
-  };
-}
-
-function getSelectedAppearance() {
-  return Object.fromEntries(catalogRenderOrder().map((slot) => [slot, ui[`${slot}Select`]?.value || catalogSlotDefault(slot)]));
-}
 
 function catalogRenderOrder() {
   return characterCatalog?.renderOrder || DEFAULT_RENDER_ORDER;
@@ -1476,7 +1640,11 @@ function resetMobileInput() {
 }
 
 function isOverlayOpen() {
-  return !ui.startScreen.classList.contains("hidden") || !ui.deathScreen.classList.contains("hidden");
+  return Boolean(ui.startScreen && !ui.startScreen.classList.contains("hidden"))
+    || Boolean(ui.deathScreen && !ui.deathScreen.classList.contains("hidden"))
+    || Boolean(ui.inventoryPanel && !ui.inventoryPanel.classList.contains("hidden"))
+    || Boolean(ui.characterPanel && !ui.characterPanel.classList.contains("hidden"))
+    || Boolean(ui.itemInspect && !ui.itemInspect.classList.contains("hidden"));
 }
 
 function isRightSideTouch(event) {
@@ -1493,18 +1661,8 @@ function getMobileAimWorldPoint(scene) {
   return scene.cameras.main.getWorldPoint(x, y);
 }
 
-ui.startButton.addEventListener("click", () => {
-  hasStarted = true;
-  ui.startScreen.classList.add("hidden");
-  refreshMobileMode();
-  connect(ui.heroName.value, ui.houseName.value, getSelectedAppearance());
-});
-
-ui.newHeirButton.addEventListener("click", () => {
-  const nextName = ["Aren", "Mira", "Rowan", "Sel", "Tarin", "Edda"][Math.floor(Math.random() * 6)];
-  ui.heroName.value = nextName;
-  ui.houseName.value = meta?.dynasty || ui.houseName.value || "Valen";
-  ws?.send(JSON.stringify({ t: "newHeir", name: ui.heroName.value, house: ui.houseName.value, appearance: getSelectedAppearance() }));
+ui.respawnButton?.addEventListener("click", () => {
+  ws?.send(JSON.stringify({ t: "respawn" }));
 });
 
 window.addEventListener("resize", () => gameScene?.resize());

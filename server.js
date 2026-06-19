@@ -1,20 +1,59 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { WebSocket, WebSocketServer } = require("ws");
 
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, "data");
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, "data");
 const SAVE_FILE = path.join(DATA_DIR, "legacy-state.json");
 const CHARACTER_CATALOG_FILE = path.join(ROOT, "assets", "generated-characters", "catalog.json");
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
+const CHALLENGE_TTL_MS = 1000 * 60 * 5;
+const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const SOLANA_CHAIN_ID = process.env.SOLANA_CHAIN_ID || "mainnet";
+const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || `http://localhost:${PORT}`;
+const SESSION_TOKEN_MAX = 160;
 const TILE = 32;
 const WORLD_W = 80;
 const WORLD_H = 80;
 const TICK_RATE = 60;
+const BROADCAST_RATE = 20;
 const DT = 1 / TICK_RATE;
 const MAX_DEPTH = 100;
 const COMBAT_WORLD_PREFIX = "combat";
+const INVENTORY_SIZE = 10;
+const EQUIPMENT_SLOTS = ["helmet", "chest", "gloves", "boots", "weapon"];
+const RARITIES = [
+  { id: "common", weight: 720, color: "#d8d2bd" },
+  { id: "magic", weight: 210, color: "#5fa8ff" },
+  { id: "rare", weight: 58, color: "#f2cf5b" },
+  { id: "epic", weight: 11, color: "#b66dff" },
+  { id: "legendary", weight: 1, color: "#ff8a2a" },
+];
+const ITEM_DEFS = [
+  itemDef("helmet", "patched-cap", "Patched Cap"),
+  itemDef("helmet", "rusted-sallet", "Rusted Sallet"),
+  itemDef("helmet", "grave-crown", "Grave Crown"),
+  itemDef("helmet", "ember-hood", "Ember Hood"),
+  itemDef("chest", "travelers-vest", "Traveler's Vest"),
+  itemDef("chest", "ringmail-vest", "Ringmail Vest"),
+  itemDef("chest", "warden-coat", "Warden Coat"),
+  itemDef("chest", "ashen-cuirass", "Ashen Cuirass"),
+  itemDef("gloves", "linen-wraps", "Linen Wraps"),
+  itemDef("gloves", "iron-grips", "Iron Grips"),
+  itemDef("gloves", "grave-gauntlets", "Grave Gauntlets"),
+  itemDef("gloves", "ember-claws", "Ember Claws"),
+  itemDef("boots", "mud-boots", "Mud Boots"),
+  itemDef("boots", "scout-boots", "Scout Boots"),
+  itemDef("boots", "tomb-greaves", "Tomb Greaves"),
+  itemDef("boots", "cinder-treads", "Cinder Treads"),
+  itemDef("weapon", "chipped-sword", "Chipped Sword"),
+  itemDef("weapon", "hunter-axe", "Hunter Axe"),
+  itemDef("weapon", "grave-mace", "Grave Mace"),
+  itemDef("weapon", "ember-blade", "Ember Blade"),
+];
 const BASE_ATTACK = {
   shape: "rectangle",
   range: 39,
@@ -71,9 +110,129 @@ worlds.haven.portal = worlds.haven.portals[0];
 const activeCombatWorlds = new Map();
 
 const clients = new Map();
+const challenges = new Map();
+const sessions = new Map();
+const rateLimits = new Map();
 const server = http.createServer((req, res) => {
   if (req.url === "/api/legends") {
     sendJson(res, publicLegends());
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/session") {
+    const session = getRequestSession(req);
+    if (!session && process.env.LEGACY_TEST_MODE === "1") {
+      sendJson(res, {
+        ok: true,
+        profile: { wallet: "test", characterName: "Tester", needsName: false, renown: 0, records: { maxLevel: 1, longestLife: 0, mostKills: 0 } },
+        turnstileSiteKey: "",
+      });
+      return;
+    }
+    sendJson(res, {
+      ok: Boolean(session),
+      profile: session ? publicProfile(session.profile) : null,
+      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || "",
+    }, session ? 200 : 401);
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/api/auth/config") {
+    sendJson(res, { turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || "" });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/auth/challenge") {
+    readJson(req, res, async (body) => {
+      const ip = requestIp(req);
+      if (!allowRate(`challenge:${ip}`, 10, 60_000)) {
+        sendJson(res, { ok: false, error: "Too many attempts." }, 429);
+        return;
+      }
+      const wallet = cleanWalletAddress(body.wallet);
+      if (!wallet) {
+        sendJson(res, { ok: false, error: "Invalid wallet address." }, 400);
+        return;
+      }
+      const turnstileOk = await verifyTurnstile(body.turnstileToken, ip);
+      if (!turnstileOk) {
+        sendJson(res, { ok: false, error: "Bot verification failed." }, 403);
+        return;
+      }
+      cleanupAuthMaps();
+      const nonce = randomToken(18);
+      const issuedAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS).toISOString();
+      const domain = hostFromOrigin(PUBLIC_ORIGIN) || req.headers.host || "localhost";
+      const statement = "Sign in to Legacy. This does not trigger a transaction or cost gas.";
+      const message = [
+        `${domain} wants you to sign in with your Solana account:`,
+        wallet,
+        "",
+        statement,
+        `URI: ${PUBLIC_ORIGIN}`,
+        "Version: 1",
+        `Chain ID: ${SOLANA_CHAIN_ID}`,
+        `Nonce: ${nonce}`,
+        `Issued At: ${issuedAt}`,
+        `Expiration Time: ${expiresAt}`,
+      ].join("\n");
+      challenges.set(nonce, { wallet, message, expiresAt: Date.now() + CHALLENGE_TTL_MS, ip });
+      sendJson(res, { ok: true, nonce, message });
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/auth/verify") {
+    readJson(req, res, (body) => {
+      const ip = requestIp(req);
+      if (!allowRate(`verify:${ip}`, 15, 60_000)) {
+        sendJson(res, { ok: false, error: "Too many attempts." }, 429);
+        return;
+      }
+      const wallet = cleanWalletAddress(body.wallet);
+      const nonce = String(body.nonce || "");
+      const challenge = challenges.get(nonce);
+      challenges.delete(nonce);
+      if (!wallet || !challenge || challenge.wallet !== wallet || challenge.expiresAt < Date.now()) {
+        sendJson(res, { ok: false, error: "Invalid or expired challenge." }, 401);
+        return;
+      }
+      if (!verifySolanaSignature(wallet, challenge.message, body.signature)) {
+        sendJson(res, { ok: false, error: "Invalid signature." }, 401);
+        return;
+      }
+      const profile = getProfile(wallet);
+      const token = createSession(wallet);
+      sendJson(res, { ok: true, sessionToken: token, profile: publicProfile(profile) });
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/profile/name") {
+    readJson(req, res, (body) => {
+      const session = getBearerSession(req);
+      if (!session) {
+        sendJson(res, { ok: false, error: "Session expired." }, 401);
+        return;
+      }
+      if (!allowRate(`name:${session.wallet}`, 8, 60_000)) {
+        sendJson(res, { ok: false, error: "Too many attempts." }, 429);
+        return;
+      }
+      const validation = validateCharacterName(body.name, session.wallet);
+      if (!validation.ok) {
+        sendJson(res, { ok: false, error: validation.error }, 400);
+        return;
+      }
+      if (!session.profile.characterName) {
+        session.profile.characterName = validation.name;
+        session.profile.nameKey = normalizeName(validation.name);
+        session.profile.appearance = randomAppearance();
+        savePersisted();
+      }
+      sendJson(res, { ok: true, profile: publicProfile(session.profile) });
+    });
     return;
   }
 
@@ -112,8 +271,13 @@ wss.on("connection", (ws) => {
 
     if (msg.t === "hello") {
       player = createPlayer(ws, msg);
+      if (!player) {
+        ws.send(JSON.stringify({ t: "authError", error: "Wallet session required." }));
+        ws.close();
+        return;
+      }
       clients.set(player.id, player);
-      ws.send(JSON.stringify({ t: "welcome", id: player.id, account: player.accountId, meta: player.meta }));
+      ws.send(JSON.stringify({ t: "welcome", id: player.id, wallet: player.wallet, meta: player.meta }));
       return;
     }
 
@@ -131,21 +295,57 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    if (msg.t === "newHeir") {
-      reviveAsHeir(player, msg.name, msg.house, msg.appearance);
+    if (msg.t === "respawn") {
+      respawnPlayer(player);
+      return;
+    }
+
+    if (msg.t === "equipItem") {
+      equipInventoryItem(player, msg.itemId);
+      return;
+    }
+
+    if (msg.t === "destroyItem") {
+      destroyInventoryItem(player, msg.itemId);
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testGiveItem") {
+      if (player.inventory.length < INVENTORY_SIZE) player.inventory.push(makeItem(1));
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testSpawnPrivateLoot") {
+      const world = getWorld(player.world);
+      if (world) world.loot.push(makeLoot(player.x, player.y, player.id, world.depth || 1));
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testSpawnDamageLoot") {
+      const world = getWorld(player.world);
+      const ownerId = getLootOwner({ hitBy: player.id, damageBy: msg.damageBy || {} }) || player.id;
+      if (world) world.loot.push(makeLoot(player.x, player.y, ownerId, world.depth || 1));
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testKillPlayer") {
+      killPlayer(player, "test");
     }
   });
 
   ws.on("close", () => {
     if (player) {
       const oldWorld = player.world;
+      saveLiveState(player);
       clients.delete(player.id);
       cleanupEmptyCombatWorld(oldWorld);
+      savePersisted();
     }
   });
 });
 
 setInterval(tick, 1000 / TICK_RATE);
+setInterval(broadcastWorld, 1000 / BROADCAST_RATE);
 setInterval(savePersisted, 5000);
 
 server.listen(PORT, () => {
@@ -153,14 +353,26 @@ server.listen(PORT, () => {
 });
 
 function createPlayer(ws, msg) {
-  const accountId = cleanId(msg.accountId) || cryptoId();
-  const meta = getMeta(accountId, msg.house);
-  const char = makeCharacter(msg.name, meta.dynasty, meta, msg.appearance);
+  const session = getSessionFromToken(msg.sessionToken);
+  let profile = session?.profile || null;
+  let wallet = session?.wallet || null;
+  if (!profile && process.env.LEGACY_TEST_MODE === "1") {
+    wallet = cleanId(msg.accountId) || `test-${cryptoId()}`;
+    profile = getProfile(wallet);
+    if (!profile.characterName) {
+      profile.characterName = cleanName(msg.name, "Tester");
+      profile.nameKey = normalizeName(profile.characterName);
+      profile.appearance = randomAppearance();
+    }
+  }
+  if (!profile || !profile.characterName) return null;
+  const char = makeCharacter(profile);
   return {
     ws,
     id: cryptoId(),
-    accountId,
-    meta,
+    wallet,
+    accountId: wallet,
+    meta: profile,
     input: { dx: 0, dy: 0, attack: false, angle: 0 },
     attackCd: 0,
     portalCd: 1,
@@ -170,11 +382,11 @@ function createPlayer(ws, msg) {
   };
 }
 
-function makeCharacter(name, house, meta, appearance) {
-  meta.generation += 1;
-  return {
-    name: cleanName(name, "Kael"),
-    house: cleanName(house || meta.dynasty, "Valen"),
+function makeCharacter(profile) {
+  const saved = profile.lastLiveState && typeof profile.lastLiveState === "object" ? profile.lastLiveState : null;
+  const base = {
+    name: profile.characterName,
+    house: "",
     world: "haven",
     x: 40 * TILE,
     y: 42 * TILE,
@@ -184,26 +396,55 @@ function makeCharacter(name, house, meta, appearance) {
     xp: 0,
     gold: 0,
     kills: 0,
-    power: 1 + Math.floor(meta.renown / 35),
-    appearance: cleanAppearance(appearance),
+    power: 1 + Math.floor(profile.renown / 35),
+    inventory: [],
+    equipment: emptyEquipment(),
+    appearance: cleanAppearance(profile.appearance || randomAppearance()),
     hitbox: { radius: PLAYER_HITBOX_RADIUS },
     facing: 1,
     moving: false,
     aliveSince: Date.now(),
   };
+  if (!saved) {
+    profile.generation += 1;
+    return base;
+  }
+  const worldId = cleanWorldId(saved.world);
+  const savedWorld = ensureWorldForTarget(worldId);
+  const savedX = clamp(Number(saved.x) || base.x, TILE, WORLD_W * TILE - TILE);
+  const savedY = clamp(Number(saved.y) || base.y, TILE, WORLD_H * TILE - TILE);
+  const restoredPoint = getSafeRestorePoint(savedWorld, savedX, savedY);
+  return {
+    ...base,
+    world: worldId,
+    x: restoredPoint.x,
+    y: restoredPoint.y,
+    hp: clamp(Math.round(Number(saved.hp) || base.hp), 1, Number(saved.maxHp) || base.maxHp),
+    maxHp: clamp(Math.round(Number(saved.maxHp) || base.maxHp), 1, 9999),
+    level: clamp(Math.round(Number(saved.level) || base.level), 1, 999),
+    xp: Math.max(0, Math.round(Number(saved.xp) || 0)),
+    gold: Math.max(0, Math.round(Number(saved.gold) || 0)),
+    kills: Math.max(0, Math.round(Number(saved.kills) || 0)),
+    power: Math.max(base.power, Math.round(Number(saved.power) || base.power)),
+    inventory: cleanSavedInventory(saved.inventory),
+    equipment: cleanSavedEquipment(saved.equipment),
+    appearance: cleanAppearance(saved.appearance || profile.appearance),
+  };
 }
 
-function reviveAsHeir(player, name, house, appearance) {
-  const meta = getMeta(player.accountId, house || player.house);
-  const next = makeCharacter(name || randomHeirName(), meta.dynasty, meta, appearance || player.appearance);
+function respawnPlayer(player) {
+  const oldWorld = player.world;
+  player.meta.lastLiveState = null;
+  player.meta.appearance = randomAppearance();
+  const next = makeCharacter(player.meta);
   Object.assign(player, next, {
-    meta,
     input: { dx: 0, dy: 0, attack: false, angle: 0 },
     attackCd: 0,
     portalCd: 1,
     dead: false,
   });
-  player.ws.send(JSON.stringify({ t: "revived", meta }));
+  cleanupEmptyCombatWorld(oldWorld);
+  player.ws.send(JSON.stringify({ t: "revived", meta: player.meta }));
   savePersisted();
 }
 
@@ -213,7 +454,6 @@ function tick() {
   updateEnemies();
   updateWorldEvent();
   updateCombatTexts();
-  broadcastWorld();
 }
 
 function updatePlayer(player) {
@@ -272,6 +512,8 @@ function attack(player) {
     const dealt = Math.min(damage, Math.max(0, enemy.hp));
     enemy.hp -= damage;
     enemy.hitBy = player.id;
+    enemy.damageBy = enemy.damageBy || {};
+    enemy.damageBy[player.id] = (enemy.damageBy[player.id] || 0) + dealt;
     addDamageText(world, enemy.x, enemy.y - 30, dealt);
     if (enemy.hp <= 0) dead.push(enemy);
   }
@@ -282,7 +524,8 @@ function attack(player) {
     player.kills += 1;
     player.xp += enemy.level * 10;
     player.gold += 4 + enemy.level;
-    if (rng() < getLootDropChance(world.depth)) world.loot.push(makeLoot(enemy.x, enemy.y, enemy.level >= 5 || rng() < getRareLootChance(world.depth), world.depth));
+    const ownerId = getLootOwner(enemy) || player.id;
+    if (rng() < getLootDropChance(world.depth)) world.loot.push(makeLoot(enemy.x, enemy.y, ownerId, world.depth));
     world.enemies.splice(index, 1);
     world.enemies.push(makeEnemy(world.id, Math.floor(player.level / 2)));
     while (player.xp >= player.level * 26) levelUp(player);
@@ -303,9 +546,8 @@ function collectLoot(player) {
   const loot = world.loot;
   for (let i = loot.length - 1; i >= 0; i -= 1) {
     const item = loot[i];
-    if (distance(player, item) < 24) {
-      player.gold += item.gold;
-      player.power += item.power;
+    if (item.ownerId === player.id && distance(player, item) < 24 && player.inventory.length < INVENTORY_SIZE) {
+      player.inventory.push(item.item);
       loot.splice(i, 1);
     }
   }
@@ -319,7 +561,8 @@ function maybeWarp(player) {
   const oldWorld = player.world;
   const targetWorld = ensureWorldForTarget(portal.target);
   if (!targetWorld) return;
-  movePlayerToWorld(player, targetWorld.id, portal.spawnX ?? 40 * TILE, portal.spawnY ?? 42 * TILE);
+  const spawn = getPortalSpawnPoint(targetWorld, portal, oldWorld);
+  movePlayerToWorld(player, targetWorld.id, spawn.x, spawn.y);
   if (portal.target === "haven") {
     player.hp = Math.min(player.maxHp, player.hp + 30);
   }
@@ -408,7 +651,7 @@ function killPlayer(player, cause) {
   if (player.dead) return;
   const lifeSeconds = Math.max(1, Math.round((Date.now() - player.aliveSince) / 1000));
   const grave = {
-    name: `${player.name} ${player.house}`,
+    name: player.name,
     level: player.level,
     cause,
     lifeSeconds,
@@ -440,6 +683,10 @@ function killPlayer(player, cause) {
   persisted.relics = persisted.relics.slice(0, 40);
   const oldWorld = player.world;
   player.dead = true;
+  player.gold = 0;
+  player.inventory = [];
+  player.equipment = emptyEquipment();
+  player.meta.lastLiveState = null;
   player.ws.send(JSON.stringify({ t: "death", grave, meta: player.meta }));
   savePersisted();
   cleanupEmptyCombatWorld(oldWorld);
@@ -449,7 +696,7 @@ function broadcastWorld() {
   for (const player of clients.values()) {
     if (player.ws.readyState !== WebSocket.OPEN) continue;
     const changedWorld = player.sentWorld !== player.world;
-    const snapshot = snapshotWorld(player.world, changedWorld);
+    const snapshot = snapshotWorld(player.world, changedWorld, player);
     if (!snapshot) continue;
     player.sentWorld = player.world;
     player.ws.send(JSON.stringify({
@@ -463,7 +710,7 @@ function broadcastWorld() {
   }
 }
 
-function snapshotWorld(worldId, includeTiles) {
+function snapshotWorld(worldId, includeTiles, viewer) {
   const world = getWorld(worldId);
   if (!world) return null;
   const snapshot = {
@@ -477,7 +724,7 @@ function snapshotWorld(worldId, includeTiles) {
     players: [...clients.values()].filter((p) => !p.dead && p.world === worldId).map((p) => ({
       id: p.id,
       name: p.name,
-      house: p.house,
+      house: "",
       x: round2(p.x),
       y: round2(p.y),
       hp: Math.max(0, Math.round(p.hp)),
@@ -516,7 +763,21 @@ function snapshotWorld(worldId, includeTiles) {
       age: Date.now() - text.born,
       life: text.life,
     })),
-    loot: world.loot.map((l) => ({ id: l.id, name: l.name, x: round2(l.x), y: round2(l.y), gold: l.gold, rare: l.rare })),
+    inventory: viewer ? viewer.inventory.map(publicItem) : [],
+    equipment: viewer ? publicEquipment(viewer.equipment) : emptyEquipment(),
+    inventorySize: INVENTORY_SIZE,
+    equipmentSlots: EQUIPMENT_SLOTS,
+    rarities: RARITIES.map((rarity) => ({ id: rarity.id, color: rarity.color })),
+    loot: world.loot
+      .filter((l) => viewer && l.ownerId === viewer.id)
+      .map((l) => ({
+        id: l.id,
+        name: l.item.name,
+        x: round2(l.x),
+        y: round2(l.y),
+        item: publicItem(l.item),
+        rarity: l.item.rarity,
+      })),
   };
   if (includeTiles) snapshot.tiles = world.tiles;
   return snapshot;
@@ -577,6 +838,60 @@ function movePlayerToWorld(player, worldId, x, y) {
   player.sentWorld = null;
 }
 
+function getPortalSpawnPoint(targetWorld, sourcePortal, sourceWorldId = "") {
+  const sourceDepth = depthFromWorldId(sourceWorldId);
+  const targetDepth = depthFromWorldId(targetWorld?.id);
+  let anchor = null;
+  if (sourcePortal?.target === "haven") {
+    anchor = targetWorld.portals?.[0] || targetWorld.portal || null;
+  } else if (sourceDepth && targetDepth && sourceDepth > targetDepth) {
+    anchor = (targetWorld.portals || []).find((portal) => portal.kind === "next" || portal.target === sourceWorldId) || targetWorld.portal || null;
+  } else if (sourcePortal) {
+    return getSafePointNear(targetWorld, sourcePortal.spawnX ?? 40 * TILE, sourcePortal.spawnY ?? 42 * TILE);
+  }
+  if (anchor) return getAdjacentPortalPoint(targetWorld, anchor);
+  return getSafePointNear(targetWorld, 40 * TILE, 42 * TILE);
+}
+
+function getSafeRestorePoint(world, x, y) {
+  if (world && isWalkableAt(world, x, y, PLAYER_HITBOX_RADIUS)) return { x, y };
+  const anchor = world?.portals?.[0] || world?.portal || null;
+  if (anchor) return getAdjacentPortalPoint(world, anchor);
+  return { x: 40 * TILE, y: 42 * TILE };
+}
+
+function getAdjacentPortalPoint(world, portal) {
+  const offsets = [
+    [0, 1],
+    [1, 0],
+    [-1, 0],
+    [0, -1],
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+    [0, 2],
+    [2, 0],
+    [-2, 0],
+    [0, -2],
+  ];
+  for (const [dx, dy] of offsets) {
+    const point = {
+      x: portal.x + dx * TILE,
+      y: portal.y + dy * TILE,
+    };
+    if (isWalkableAt(world, point.x, point.y, PLAYER_HITBOX_RADIUS) && tileAt(world, point.x, point.y) !== "portal") return point;
+  }
+  return getSafePointNear(world, portal.x, portal.y);
+}
+
+function getSafePointNear(world, x, y) {
+  const px = clamp(Number(x) || 40 * TILE, TILE, WORLD_W * TILE - TILE);
+  const py = clamp(Number(y) || 42 * TILE, TILE, WORLD_H * TILE - TILE);
+  if (world && isWalkableAt(world, px, py, PLAYER_HITBOX_RADIUS)) return { x: px, y: py };
+  return randomPassablePointNear(world.id, px, py, TILE * 4, PLAYER_HITBOX_RADIUS);
+}
+
 function combatWorldId(depth) {
   return depth === 1 ? COMBAT_WORLD_PREFIX : `${COMBAT_WORLD_PREFIX}${depth}`;
 }
@@ -601,13 +916,14 @@ function createCombatWorld(depth) {
       x: 40 * TILE,
       y: 72 * TILE,
       target: depth === 1 ? "haven" : combatWorldId(depth - 1),
+      kind: "previous",
       label: depth === 1 ? "Back to haven" : `Back to depth ${depth - 1}`,
       spawnX: depth === 1 ? 40 * TILE : 40 * TILE,
       spawnY: depth === 1 ? 43 * TILE : 70 * TILE,
     },
   ];
   if (depth < MAX_DEPTH) {
-    portals.push({ x: map.exitX * TILE, y: map.exitY * TILE, target: combatWorldId(depth + 1), label: `Depth ${depth + 1}`, spawnX: 40 * TILE, spawnY: 70 * TILE });
+    portals.push({ x: map.exitX * TILE, y: map.exitY * TILE, target: combatWorldId(depth + 1), kind: "next", label: `Depth ${depth + 1}`, spawnX: 40 * TILE, spawnY: 70 * TILE });
   }
   const world = {
     id,
@@ -630,11 +946,6 @@ function createCombatWorld(depth) {
 function populateCombatWorld(world) {
   const enemyCount = getEnemyCount(world.depth);
   for (let i = 0; i < enemyCount; i += 1) world.enemies.push(makeEnemy(world.id));
-  const lootCount = Math.min(48, 16 + Math.floor(world.depth * 0.32));
-  for (let i = 0; i < lootCount; i += 1) {
-    const point = randomPassablePoint(world.id);
-    world.loot.push(makeLoot(point.x, point.y, rng() < getRareLootChance(world.depth), world.depth));
-  }
 }
 
 function getBiome(depth) {
@@ -647,11 +958,11 @@ function getEnemyCount(depth) {
 }
 
 function getRareLootChance(depth) {
-  return clamp(0.08 + depth * 0.0045, 0.08, 0.58);
+  return clamp(0.03 + depth * 0.0008, 0.03, 0.12);
 }
 
 function getLootDropChance(depth) {
-  return clamp(0.25 + depth * 0.0015, 0.25, 0.4);
+  return clamp(0.04 + depth * 0.0004, 0.04, 0.08);
 }
 
 function isCombatWorld(world) {
@@ -672,7 +983,7 @@ function publicLegends() {
     acc.maxLevel = Math.max(acc.maxLevel, meta.records.maxLevel || 1);
     acc.longestLife = Math.max(acc.longestLife, meta.records.longestLife || 0);
     acc.mostKills = Math.max(acc.mostKills, meta.records.mostKills || 0);
-    if (meta.generation > acc.oldestDynasty.generation) acc.oldestDynasty = { dynasty: meta.dynasty, generation: meta.generation };
+    if (meta.generation > acc.oldestDynasty.generation) acc.oldestDynasty = { dynasty: meta.characterName || meta.dynasty || "-", generation: meta.generation };
     return acc;
   }, { maxLevel: 1, longestLife: 0, mostKills: 0, oldestDynasty: { dynasty: "-", generation: 0 } });
 
@@ -999,6 +1310,7 @@ function makeEnemy(worldId = "combat", levelBoost = 0) {
     dmg: Math.round((5 + level * 2.5 + depth * 0.7) * (elite ? 1.45 : 1)),
     speed: Math.min(188, (38 + rng() * 22 + depth * 0.38 + (elite ? 8 : 0)) * 2),
     attackCd: 0,
+    damageBy: {},
     wander: rng() * Math.PI * 2,
     moving: false,
     facing: rng() > 0.5 ? 1 : -1,
@@ -1026,23 +1338,140 @@ function pickMonsterKind(depth) {
   return table[0][0];
 }
 
-function makeLoot(x, y, rare = false, depth = 1) {
-  const names = rare ? ["Greyfall Blade", "Ashen Crown", "Saint's Lantern"] : ["Iron Ring", "Old Coin", "Hunter Cloak", "Rusty Sword"];
+function makeLoot(x, y, ownerId, depth = 1) {
+  const item = makeItem(depth);
   return {
     id: cryptoId(),
-    name: names[Math.floor(rng() * names.length)],
+    ownerId,
     x,
     y,
-    gold: rare ? 35 + depth * 2 + Math.floor(rng() * 70) : 5 + Math.floor(depth * 0.7) + Math.floor(rng() * 22),
-    power: rare ? 2 + Math.floor(depth / 35) : 1,
-    rare,
+    item,
   };
 }
 
-function getMeta(accountId, house) {
-  if (!persisted.accounts[accountId]) {
-    persisted.accounts[accountId] = {
-      dynasty: cleanName(house, "Valen"),
+function makeItem(depth = 1) {
+  const base = ITEM_DEFS[Math.floor(rng() * ITEM_DEFS.length)];
+  const rarity = pickRarity(depth);
+  return {
+    uid: cryptoId(),
+    id: base.id,
+    name: rarityName(base.name, rarity),
+    type: base.type,
+    typeLabel: equipmentSlotLabel(base.type),
+    rarity,
+    icon: `assets/generated-items/${base.id}.png`,
+  };
+}
+
+function itemDef(type, id, name) {
+  return { type, id, name };
+}
+
+function pickRarity(depth) {
+  const rareBoost = 1 + Math.min(depth, 100) / 100;
+  const table = RARITIES.map((rarity) => ({
+    ...rarity,
+    weight: rarity.id === "common" || rarity.id === "magic" ? rarity.weight : rarity.weight * rareBoost,
+  }));
+  const total = table.reduce((sum, rarity) => sum + rarity.weight, 0);
+  let roll = rng() * total;
+  for (const rarity of table) {
+    roll -= rarity.weight;
+    if (roll <= 0) return rarity.id;
+  }
+  return "common";
+}
+
+function rarityName(name, rarity) {
+  if (rarity === "common") return name;
+  const prefix = {
+    magic: "Glimmering",
+    rare: "Gilded",
+    epic: "Runebound",
+    legendary: "Mythic",
+  }[rarity] || "";
+  return `${prefix} ${name}`;
+}
+
+function getLootOwner(enemy) {
+  let ownerId = enemy.hitBy || null;
+  let bestDamage = -1;
+  for (const [playerId, damage] of Object.entries(enemy.damageBy || {})) {
+    if (damage > bestDamage) {
+      ownerId = playerId;
+      bestDamage = damage;
+    }
+  }
+  return ownerId;
+}
+
+function equipInventoryItem(player, itemId) {
+  if (player.dead) return;
+  const index = player.inventory.findIndex((item) => item.uid === itemId);
+  if (index === -1) return;
+  const item = player.inventory[index];
+  if (!EQUIPMENT_SLOTS.includes(item.type)) return;
+  const previous = player.equipment[item.type] || null;
+  player.inventory.splice(index, 1);
+  if (previous) {
+    if (player.inventory.length >= INVENTORY_SIZE) {
+      player.inventory.splice(index, 0, item);
+      return;
+    }
+    player.inventory.push(previous);
+  }
+  player.equipment[item.type] = item;
+}
+
+function destroyInventoryItem(player, itemId) {
+  if (player.dead) return;
+  const index = player.inventory.findIndex((item) => item.uid === itemId);
+  if (index !== -1) player.inventory.splice(index, 1);
+}
+
+function emptyEquipment() {
+  return Object.fromEntries(EQUIPMENT_SLOTS.map((slot) => [slot, null]));
+}
+
+function publicEquipment(equipment) {
+  const out = emptyEquipment();
+  for (const slot of EQUIPMENT_SLOTS) out[slot] = equipment?.[slot] ? publicItem(equipment[slot]) : null;
+  return out;
+}
+
+function publicItem(item) {
+  if (!item) return null;
+  return {
+    uid: item.uid,
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    typeLabel: item.typeLabel,
+    rarity: item.rarity,
+    icon: item.icon,
+  };
+}
+
+function equipmentSlotLabel(slot) {
+  return {
+    helmet: "Casque",
+    chest: "Torse",
+    gloves: "Gants",
+    boots: "Bottes",
+    weapon: "Arme",
+  }[slot] || slot;
+}
+
+function getProfile(wallet) {
+  const key = cleanWalletAddress(wallet) || cleanId(wallet);
+  if (!key) return null;
+  if (!persisted.accounts[key]) {
+    persisted.accounts[key] = {
+      wallet: key,
+      characterName: "",
+      nameKey: "",
+      appearance: randomAppearance(),
+      lastLiveState: null,
       generation: 0,
       renown: 0,
       graves: [],
@@ -1050,25 +1479,45 @@ function getMeta(accountId, house) {
       records: { maxLevel: 1, longestLife: 0, mostKills: 0 },
     };
   }
-  if (house) persisted.accounts[accountId].dynasty = cleanName(house, persisted.accounts[accountId].dynasty);
-  return persisted.accounts[accountId];
+  const profile = persisted.accounts[key];
+  profile.wallet = profile.wallet || key;
+  profile.characterName = profile.characterName || "";
+  profile.nameKey = profile.nameKey || normalizeName(profile.characterName);
+  profile.appearance = cleanAppearance(profile.appearance || randomAppearance());
+  profile.lastLiveState = profile.lastLiveState || null;
+  profile.graves = Array.isArray(profile.graves) ? profile.graves : [];
+  profile.relics = Array.isArray(profile.relics) ? profile.relics : [];
+  profile.records = profile.records || { maxLevel: 1, longestLife: 0, mostKills: 0 };
+  profile.generation = Number(profile.generation) || 0;
+  profile.renown = Number(profile.renown) || 0;
+  return profile;
 }
 
 function loadPersisted() {
   try {
-    return JSON.parse(fs.readFileSync(SAVE_FILE, "utf8"));
+    const state = JSON.parse(fs.readFileSync(SAVE_FILE, "utf8"));
+    state.accounts ||= {};
+    state.graves ||= [];
+    state.relics ||= [];
+    for (const [key, profile] of Object.entries(state.accounts)) {
+      if (profile.dynasty && !profile.characterName) profile.characterName = cleanName(profile.dynasty, "");
+      profile.nameKey = profile.nameKey || normalizeName(profile.characterName);
+      profile.wallet = profile.wallet || key;
+    }
+    return state;
   } catch {
     return { accounts: {}, graves: [], relics: [] };
   }
 }
 
 function savePersisted() {
+  for (const player of clients.values()) saveLiveState(player);
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(SAVE_FILE, JSON.stringify(persisted, null, 2));
 }
 
-function sendJson(res, body) {
-  res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+function sendJson(res, body, status = 200) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
 }
 
@@ -1138,8 +1587,38 @@ function cleanName(value, fallback) {
   return clean || fallback;
 }
 
+function validateCharacterName(value, wallet) {
+  const raw = String(value || "").normalize("NFKC").trim();
+  if (raw.length < 3 || raw.length > 16) return { ok: false, error: "Name must be 3-16 characters." };
+  if (!/^[A-Za-z0-9][A-Za-z0-9 _-]*[A-Za-z0-9]$/.test(raw)) return { ok: false, error: "Name contains invalid characters." };
+  if (/[_ -]{2,}/.test(raw)) return { ok: false, error: "Name has too many separators." };
+  const key = normalizeName(raw);
+  const reserved = new Set(["admin", "moderator", "system", "legacy", "server", "null", "undefined", "phantom", "solana"]);
+  const banned = ["fuck", "shit", "bitch", "cunt", "nigger", "nigga", "faggot", "retard", "pute", "merde", "salope", "connard", "encule"];
+  if (reserved.has(key) || banned.some((word) => key.includes(word))) return { ok: false, error: "Name is not allowed." };
+  for (const profile of Object.values(persisted.accounts)) {
+    if (profile.wallet !== wallet && normalizeName(profile.characterName) === key) return { ok: false, error: "Name is already taken." };
+  }
+  return { ok: true, name: raw };
+}
+
+function normalizeName(value) {
+  return String(value || "").normalize("NFKC").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function cleanId(value) {
   return String(value || "").replace(/[^\w-]/g, "").slice(0, 48);
+}
+
+function cleanWalletAddress(value) {
+  const wallet = String(value || "").trim();
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet) ? wallet : "";
+}
+
+function cleanWorldId(value) {
+  const worldId = String(value || "");
+  if (worldId === "haven") return "haven";
+  return depthFromWorldId(worldId) ? worldId : "haven";
 }
 
 function cleanAppearance(value) {
@@ -1150,8 +1629,216 @@ function cleanAppearance(value) {
     const allowed = slotDef.items.map((item) => item.id);
     appearance[slot] = pick(source[slot], allowed, slotDef.default || (slot === "body" ? "human" : "none"));
   }
-  if (appearance.helmet !== "none") appearance.hat = "none";
   return appearance;
+}
+
+function randomAppearance() {
+  const appearance = {};
+  for (const slot of characterCatalog.renderOrder) {
+    const slotDef = characterCatalog.slots[slot];
+    const choices = slotDef.items.map((item) => item.id).filter((id) => id !== "none");
+    appearance[slot] = choices.length ? choices[Math.floor(rng() * choices.length)] : slotDef.default || "none";
+  }
+  return cleanAppearance(appearance);
+}
+
+function saveLiveState(player) {
+  if (!player || player.dead || !player.meta) return;
+  player.meta.lastLiveState = {
+    world: cleanWorldId(player.world),
+    x: round2(player.x),
+    y: round2(player.y),
+    hp: Math.max(1, Math.round(player.hp)),
+    maxHp: player.maxHp,
+    level: player.level,
+    xp: player.xp,
+    gold: player.gold,
+    kills: player.kills,
+    power: player.power,
+    inventory: player.inventory.map(publicItem),
+    equipment: publicEquipment(player.equipment),
+    appearance: cleanAppearance(player.appearance),
+    savedAt: new Date().toISOString(),
+  };
+}
+
+function cleanSavedInventory(items) {
+  return Array.isArray(items) ? items.map(cleanSavedItem).filter(Boolean).slice(0, INVENTORY_SIZE) : [];
+}
+
+function cleanSavedEquipment(equipment) {
+  const out = emptyEquipment();
+  for (const slot of EQUIPMENT_SLOTS) out[slot] = cleanSavedItem(equipment?.[slot]);
+  return out;
+}
+
+function cleanSavedItem(item) {
+  if (!item || !EQUIPMENT_SLOTS.includes(item.type)) return null;
+  return {
+    uid: cleanId(item.uid) || cryptoId(),
+    id: cleanId(item.id) || "item",
+    name: cleanName(item.name, "Item"),
+    type: item.type,
+    typeLabel: equipmentSlotLabel(item.type),
+    rarity: RARITIES.some((rarity) => rarity.id === item.rarity) ? item.rarity : "common",
+    icon: String(item.icon || "").startsWith("assets/generated-items/") ? item.icon : `assets/generated-items/${cleanId(item.id) || "equipment-icon"}.png`,
+  };
+}
+
+function publicProfile(profile) {
+  return {
+    wallet: profile.wallet,
+    characterName: profile.characterName || "",
+    needsName: !profile.characterName,
+    renown: profile.renown || 0,
+    records: profile.records || { maxLevel: 1, longestLife: 0, mostKills: 0 },
+  };
+}
+
+function createSession(wallet) {
+  const token = randomToken(48);
+  const profile = getProfile(wallet);
+  sessions.set(token, { wallet, profile, expiresAt: Date.now() + SESSION_TTL_MS });
+  return token;
+}
+
+function getRequestSession(req) {
+  return getBearerSession(req);
+}
+
+function getBearerSession(req) {
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  return getSessionFromToken(token);
+}
+
+function getSessionFromToken(token) {
+  const clean = String(token || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, SESSION_TOKEN_MAX);
+  const session = sessions.get(clean);
+  if (!session || session.expiresAt < Date.now()) {
+    if (clean) sessions.delete(clean);
+    return null;
+  }
+  session.expiresAt = Date.now() + SESSION_TTL_MS;
+  return session;
+}
+
+function cleanupAuthMaps() {
+  const now = Date.now();
+  for (const [nonce, challenge] of challenges) if (challenge.expiresAt < now) challenges.delete(nonce);
+  for (const [token, session] of sessions) if (session.expiresAt < now) sessions.delete(token);
+}
+
+function randomToken(length) {
+  return crypto.randomBytes(Math.ceil(length * 0.75)).toString("base64url").slice(0, length);
+}
+
+function readJson(req, res, onBody) {
+  let raw = "";
+  req.on("data", (chunk) => {
+    raw += chunk;
+    if (raw.length > 16_384) req.destroy();
+  });
+  req.on("end", () => {
+    try {
+      onBody(raw ? JSON.parse(raw) : {});
+    } catch {
+      sendJson(res, { ok: false, error: "Invalid JSON." }, 400);
+    }
+  });
+}
+
+async function verifyTurnstile(token, ip) {
+  if (process.env.LEGACY_TEST_MODE === "1" || !process.env.TURNSTILE_SECRET_KEY) return true;
+  if (!token) return false;
+  try {
+    const body = new URLSearchParams({
+      secret: process.env.TURNSTILE_SECRET_KEY,
+      response: String(token),
+      remoteip: ip,
+    });
+    const response = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body });
+    const result = await response.json();
+    return Boolean(result.success);
+  } catch {
+    return false;
+  }
+}
+
+function verifySolanaSignature(wallet, message, signature) {
+  try {
+    const publicKey = base58Decode(wallet);
+    const sig = decodeSignature(signature);
+    if (publicKey.length !== 32 || sig.length !== 64) return false;
+    const key = crypto.createPublicKey({
+      key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), publicKey]),
+      format: "der",
+      type: "spki",
+    });
+    return crypto.verify(null, Buffer.from(String(message), "utf8"), key, sig);
+  } catch {
+    return false;
+  }
+}
+
+function decodeSignature(signature) {
+  if (Array.isArray(signature)) return Buffer.from(signature);
+  const text = String(signature || "");
+  if (/^[1-9A-HJ-NP-Za-km-z]+$/.test(text)) return base58Decode(text);
+  return Buffer.from(text, "base64");
+}
+
+function base58Decode(value) {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const text = String(value);
+  let bytes = [0];
+  let leadingZeros = 0;
+  while (text[leadingZeros] === "1") leadingZeros += 1;
+  if (leadingZeros === text.length) return Buffer.alloc(leadingZeros);
+  for (const char of text.slice(leadingZeros)) {
+    const carryStart = alphabet.indexOf(char);
+    if (carryStart < 0) throw new Error("Invalid base58");
+    let carry = carryStart;
+    for (let i = 0; i < bytes.length; i += 1) {
+      carry += bytes[i] * 58;
+      bytes[i] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  const out = bytes.reverse();
+  while (leadingZeros > 0) {
+    out.unshift(0);
+    leadingZeros -= 1;
+  }
+  return Buffer.from(out);
+}
+
+function allowRate(key, max, windowMs) {
+  const now = Date.now();
+  const entry = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
+  if (entry.resetAt < now) {
+    entry.count = 0;
+    entry.resetAt = now + windowMs;
+  }
+  entry.count += 1;
+  rateLimits.set(key, entry);
+  return entry.count <= max;
+}
+
+function requestIp(req) {
+  return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+}
+
+function hostFromOrigin(origin) {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return "";
+  }
 }
 
 function pick(value, allowed, fallback) {
@@ -1162,7 +1849,7 @@ function loadCharacterCatalog() {
   try {
     const catalog = JSON.parse(fs.readFileSync(CHARACTER_CATALOG_FILE, "utf8"));
     return {
-      renderOrder: Array.isArray(catalog.renderOrder) ? catalog.renderOrder : ["body", "armor", "helmet", "weapon", "shield", "cape", "mount"],
+      renderOrder: Array.isArray(catalog.renderOrder) ? catalog.renderOrder : ["body", "skin", "hair", "armor", "helmet", "weapon", "shield"],
       slots: Object.fromEntries(Object.entries(catalog.slots || {}).map(([slot, def]) => [
         slot,
         {
@@ -1173,20 +1860,15 @@ function loadCharacterCatalog() {
     };
   } catch {
     return {
-      renderOrder: ["body", "skin", "hair", "armor", "helmet", "hat", "weapon", "shield", "cape", "mount", "pet", "aura"],
+      renderOrder: ["body", "skin", "hair", "armor", "helmet", "weapon", "shield"],
       slots: {
         body: { default: "human", items: [{ id: "human" }] },
         skin: { default: "pale", items: [{ id: "pale" }, { id: "tan" }, { id: "dark" }] },
         hair: { default: "short", items: [{ id: "none" }, { id: "short" }, { id: "long" }, { id: "wild" }] },
         armor: { default: "leather", items: [{ id: "none" }, { id: "leather" }, { id: "iron" }, { id: "dark" }] },
         helmet: { default: "none", items: [{ id: "none" }, { id: "ironCap" }, { id: "horned" }, { id: "hood" }] },
-        hat: { default: "travelerHat", items: [{ id: "none" }, { id: "travelerHat" }, { id: "witchHat" }, { id: "crown" }] },
         weapon: { default: "sword", items: [{ id: "none" }, { id: "sword" }, { id: "axe" }, { id: "staff" }] },
         shield: { default: "round", items: [{ id: "none" }, { id: "round" }, { id: "tower" }] },
-        cape: { default: "red", items: [{ id: "none" }, { id: "red" }, { id: "blue" }, { id: "green" }, { id: "tornBlack" }] },
-        mount: { default: "none", items: [{ id: "none" }, { id: "horseBrown" }, { id: "horseGrey" }, { id: "blackHorse" }] },
-        pet: { default: "none", items: [{ id: "none" }] },
-        aura: { default: "none", items: [{ id: "none" }] },
       },
     };
   }
