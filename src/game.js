@@ -54,6 +54,12 @@ const DEFAULT_ATTACK_SPEC = {
   range: 39,
   halfWidth: 18,
 };
+const HUB_BUILDINGS = [
+  { key: "hub-forge", path: "assets/hub/forge.png", x: 28, y: 42, size: 174, groundY: 0.78 },
+  { key: "hub-marketplace", path: "assets/hub/marketplace.png", x: 52, y: 42, size: 174, groundY: 0.78 },
+  { key: "hub-leaderboard", path: "assets/hub/leaderboard.png", x: 40, y: 30, size: 174, groundY: 0.78 },
+  { key: "hub-wishing-well", path: "assets/hub/wishing-well.png", x: 40, y: 54, size: 123, groundY: 0.78 },
+];
 const EQUIPMENT_SLOT_LABELS = {
   helmet: "Helmet",
   chest: "Chest",
@@ -139,6 +145,7 @@ class LegacyScene extends Phaser.Scene {
     this.load.spritesheet("orc-idle", "assets/characters/orc-idle.png", { frameWidth: 100, frameHeight: 100 });
     this.load.spritesheet("orc-walk", "assets/characters/orc-walk.png", { frameWidth: 100, frameHeight: 100 });
     this.load.spritesheet("orc-attack", "assets/characters/orc-attack.png", { frameWidth: 100, frameHeight: 100 });
+    for (const building of HUB_BUILDINGS) this.load.image(building.key, building.path);
     for (const monster of monsterCatalogItems()) {
       for (const anim of Object.keys(CHARACTER_ANIMS)) {
         const path = monster.spritesheets?.[anim];
@@ -384,6 +391,17 @@ class LegacyScene extends Phaser.Scene {
     const canvas = this.buildWorldCanvas();
     this.textures.addCanvas(this.worldMapTextureKey, canvas);
     this.worldMapImage = this.add.image(0, 0, this.worldMapTextureKey).setOrigin(0).setDepth(0);
+    this.addHubBuildings();
+  }
+
+  addHubBuildings() {
+    if (snapshot.id !== "haven") return;
+    for (const building of HUB_BUILDINGS) {
+      const x = building.x * TILE;
+      const y = building.y * TILE;
+      const image = this.add.image(x, y, building.key).setOrigin(0.5, building.groundY).setDisplaySize(building.size, building.size).setDepth(6);
+      this.propObjects.push(image);
+    }
   }
 
   buildWorldCanvas() {
@@ -540,6 +558,7 @@ class LegacyScene extends Phaser.Scene {
       forest: "grass",
       rubble: "ruin",
       tomb: "grave",
+      building: "village",
       portal: "portal",
     }[tile] || tile;
     const variants = base === "water" ? 4 : base === "bridge" || base === "portal" ? 2 : 5;
@@ -796,7 +815,7 @@ class LegacyScene extends Phaser.Scene {
   }
 
   isBlockedMovementTile(tile) {
-    return tile === "wall" || tile === "forest" || tile === "water";
+    return tile === "wall" || tile === "forest" || tile === "water" || tile === "building";
   }
 
   ensureCharacter(collection, id, player) {

@@ -18,6 +18,10 @@ const SESSION_TOKEN_MAX = 160;
 const TILE = 32;
 const WORLD_W = 80;
 const WORLD_H = 80;
+const HAVEN_CENTER_X = 40;
+const HAVEN_CENTER_Y = 42;
+const HAVEN_SPAWN_X = 35;
+const HAVEN_SPAWN_Y = 47;
 const TICK_RATE = 60;
 const BROADCAST_RATE = 20;
 const DT = 1 / TICK_RATE;
@@ -103,7 +107,7 @@ const worlds = {
     enemies: [],
     loot: [],
     combatTexts: [],
-    portals: [{ x: 40 * TILE, y: 36 * TILE, target: "combat", label: "Depth 1", spawnX: 40 * TILE, spawnY: 70 * TILE }],
+    portals: [{ x: HAVEN_CENTER_X * TILE, y: HAVEN_CENTER_Y * TILE, target: "combat", label: "Depth 1", spawnX: 40 * TILE, spawnY: 70 * TILE }],
   },
 };
 worlds.haven.portal = worlds.haven.portals[0];
@@ -388,8 +392,8 @@ function makeCharacter(profile) {
     name: profile.characterName,
     house: "",
     world: "haven",
-    x: 40 * TILE,
-    y: 42 * TILE,
+    x: HAVEN_SPAWN_X * TILE,
+    y: HAVEN_SPAWN_Y * TILE,
     hp: 100,
     maxHp: 100,
     level: 1,
@@ -460,7 +464,7 @@ function updatePlayer(player) {
   if (player.dead) return;
   const world = getWorld(player.world);
   if (!world) {
-    movePlayerToWorld(player, "haven", 40 * TILE, 42 * TILE);
+    movePlayerToWorld(player, "haven", HAVEN_SPAWN_X * TILE, HAVEN_SPAWN_Y * TILE);
     return;
   }
   player.attackCd = Math.max(0, player.attackCd - DT);
@@ -843,21 +847,21 @@ function getPortalSpawnPoint(targetWorld, sourcePortal, sourceWorldId = "") {
   const targetDepth = depthFromWorldId(targetWorld?.id);
   let anchor = null;
   if (sourcePortal?.target === "haven") {
-    anchor = targetWorld.portals?.[0] || targetWorld.portal || null;
+    return getSafePointNear(targetWorld, HAVEN_SPAWN_X * TILE, HAVEN_SPAWN_Y * TILE);
   } else if (sourceDepth && targetDepth && sourceDepth > targetDepth) {
     anchor = (targetWorld.portals || []).find((portal) => portal.kind === "next" || portal.target === sourceWorldId) || targetWorld.portal || null;
   } else if (sourcePortal) {
-    return getSafePointNear(targetWorld, sourcePortal.spawnX ?? 40 * TILE, sourcePortal.spawnY ?? 42 * TILE);
+    return getSafePointNear(targetWorld, sourcePortal.spawnX ?? HAVEN_SPAWN_X * TILE, sourcePortal.spawnY ?? HAVEN_SPAWN_Y * TILE);
   }
   if (anchor) return getAdjacentPortalPoint(targetWorld, anchor);
-  return getSafePointNear(targetWorld, 40 * TILE, 42 * TILE);
+  return getSafePointNear(targetWorld, HAVEN_SPAWN_X * TILE, HAVEN_SPAWN_Y * TILE);
 }
 
 function getSafeRestorePoint(world, x, y) {
   if (world && isWalkableAt(world, x, y, PLAYER_HITBOX_RADIUS)) return { x, y };
   const anchor = world?.portals?.[0] || world?.portal || null;
   if (anchor) return getAdjacentPortalPoint(world, anchor);
-  return { x: 40 * TILE, y: 42 * TILE };
+  return { x: HAVEN_SPAWN_X * TILE, y: HAVEN_SPAWN_Y * TILE };
 }
 
 function getAdjacentPortalPoint(world, portal) {
@@ -886,8 +890,8 @@ function getAdjacentPortalPoint(world, portal) {
 }
 
 function getSafePointNear(world, x, y) {
-  const px = clamp(Number(x) || 40 * TILE, TILE, WORLD_W * TILE - TILE);
-  const py = clamp(Number(y) || 42 * TILE, TILE, WORLD_H * TILE - TILE);
+  const px = clamp(Number(x) || HAVEN_SPAWN_X * TILE, TILE, WORLD_W * TILE - TILE);
+  const py = clamp(Number(y) || HAVEN_SPAWN_Y * TILE, TILE, WORLD_H * TILE - TILE);
   if (world && isWalkableAt(world, px, py, PLAYER_HITBOX_RADIUS)) return { x: px, y: py };
   return randomPassablePointNear(world.id, px, py, TILE * 4, PLAYER_HITBOX_RADIUS);
 }
@@ -999,20 +1003,24 @@ function createWorld(kind, mapDefinition = null) {
   const tiles = Array.from({ length: WORLD_H }, () => Array.from({ length: WORLD_W }, () => (kind === "haven" ? "forest" : mapDefinition?.wall || "wall")));
 
   if (kind === "haven") {
-    paintEllipse(40, 41, 26, 21, "grass");
-    paintEllipse(40, 41, 16, 13, "grass");
-    paintRoad(40, 42, 40, 35, "path", 1);
-    paintRoad(40, 42, 26, 42, "path", 1);
-    paintRoad(40, 42, 54, 42, "path", 1);
-    paintRoad(40, 42, 40, 56, "path", 1);
-    paintRect(31, 33, 19, 15, "village");
-    paintRect(38, 36, 5, 11, "path");
-    paintRect(35, 40, 11, 5, "path");
-    paintRect(26, 35, 5, 5, "village");
-    paintRect(50, 35, 5, 5, "village");
-    paintRect(34, 30, 13, 6, "village");
-    paintRect(38, 36, 5, 2, "path");
-    paintRect(40, 36, 1, 1, "portal");
+    paintEllipse(HAVEN_CENTER_X, HAVEN_CENTER_Y, 28, 22, "grass");
+    paintEllipse(HAVEN_CENTER_X, HAVEN_CENTER_Y, 17, 14, "grass");
+    paintRoad(HAVEN_CENTER_X, HAVEN_CENTER_Y, 28, 42, "path", 1);
+    paintRoad(HAVEN_CENTER_X, HAVEN_CENTER_Y, 52, 42, "path", 1);
+    paintRoad(HAVEN_CENTER_X, HAVEN_CENTER_Y, 40, 30, "path", 1);
+    paintRoad(HAVEN_CENTER_X, HAVEN_CENTER_Y, 40, 54, "path", 1);
+    paintRoad(HAVEN_SPAWN_X, HAVEN_SPAWN_Y, HAVEN_CENTER_X, HAVEN_CENTER_Y, "path", 1);
+    paintRect(32, 34, 17, 17, "village");
+    paintRect(38, 40, 5, 5, "path");
+    paintRect(25, 39, 7, 6, "village");
+    paintRect(49, 39, 7, 6, "village");
+    paintRect(36, 27, 9, 6, "village");
+    paintRect(37, 51, 7, 6, "village");
+    paintRect(HAVEN_CENTER_X, HAVEN_CENTER_Y, 1, 1, "portal");
+    paintRect(27, 41, 2, 1, "building");
+    paintRect(51, 41, 2, 1, "building");
+    paintRect(39, 29, 2, 1, "building");
+    paintRect(39, 53, 2, 1, "building");
     scatter("grass", "grave", 7, 27, 50, 54, 60);
     scatter("grass", "path", 12, 29, 51, 54, 62);
     return tiles;
@@ -1545,7 +1553,7 @@ function isWalkableAt(world, x, y, radius = 10) {
 }
 
 function isBlockedTile(tile) {
-  return tile === "wall" || tile === "forest" || tile === "water";
+  return tile === "wall" || tile === "forest" || tile === "water" || tile === "building";
 }
 
 function randomPassablePoint(worldId, radius = 14) {
