@@ -21,7 +21,7 @@
         <a href="#systems">Systems</a>
         <a href="docs.html">Docs</a>
       </nav>
-      <a id="navPlayLink" class="nav-play is-disabled" href="play.html" aria-disabled="true">Play Now</a>
+      <button id="connectWalletButton" class="nav-play" type="button">Connect Wallet</button>
     </header>
 
     <main>
@@ -59,36 +59,23 @@
           <h1 id="hero-title">Legacy</h1>
           <p class="hero-text">One life. A dynasty that survives you. A shared world where graves, relics, and records become the story everyone inherits.</p>
           <div class="hero-actions" aria-label="Main actions">
-            <button id="connectWalletButton" class="button-primary" type="button">Connect Wallet</button>
             <a id="heroPlayLink" class="button-secondary is-disabled" href="play.html" aria-disabled="true">Play</a>
             <a class="button-secondary" href="docs.html">Read Docs</a>
-          </div>
-          <div class="wallet-panel" aria-live="polite">
-            <strong id="walletStatus">Connect your Solana wallet to play.</strong>
-            <div id="walletList" class="wallet-list"></div>
-            <form id="nameForm" class="wallet-name-form hidden">
-              <label for="characterNameInput">Character name</label>
-              <div>
-                <input id="characterNameInput" maxlength="16" autocomplete="off" />
-                <button type="submit">Save</button>
-              </div>
-            </form>
-            <div id="turnstileSlot"></div>
           </div>
         </div>
 
         <dl class="hero-metrics" aria-label="Current prototype highlights">
           <div>
-            <dt>100</dt>
-            <dd>Combat depths</dd>
+            <dt id="onlinePlayersMetric">0</dt>
+            <dd>Players online</dd>
           </div>
           <div>
-            <dt>60 Hz</dt>
-            <dd>Server ticks</dd>
+            <dt id="recordMetric">Lvl 1</dt>
+            <dd>Record</dd>
           </div>
           <div>
             <dt>1</dt>
-            <dd>Life per heir</dd>
+            <dd>Life only</dd>
           </div>
         </dl>
       </section>
@@ -174,6 +161,23 @@
         </div>
       </section>
     </main>
+    <div id="walletModal" class="wallet-modal hidden" role="dialog" aria-modal="true" aria-labelledby="walletModalTitle">
+      <div class="wallet-backdrop" data-close-wallet-modal></div>
+      <div class="wallet-panel" aria-live="polite">
+        <button class="wallet-close" type="button" aria-label="Close wallet selection" data-close-wallet-modal>X</button>
+        <strong id="walletModalTitle">Choose your wallet</strong>
+        <p id="walletStatus">Connect your Solana wallet to play.</p>
+        <div id="walletList" class="wallet-list"></div>
+        <form id="nameForm" class="wallet-name-form hidden">
+          <label for="characterNameInput">Character name</label>
+          <div>
+            <input id="characterNameInput" maxlength="16" autocomplete="off" />
+            <button type="submit">Save</button>
+          </div>
+        </form>
+        <div id="turnstileSlot"></div>
+      </div>
+    </div>
     <script defer src="src/landing.js"></script>
   </body>
 </html>

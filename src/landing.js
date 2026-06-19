@@ -1,15 +1,18 @@
 const SESSION_KEY = "legacy.sessionToken.v1";
+const WALLET_CHOICES = ["Phantom", "Jup Wallet", "Solflare", "Backpack"];
 const PREFERRED_WALLETS = ["Phantom", "Jupiter", "Jup Wallet", "Solflare", "Backpack"];
 
 const ui = {
   connect: document.querySelector("#connectWalletButton"),
+  modal: document.querySelector("#walletModal"),
   status: document.querySelector("#walletStatus"),
   walletList: document.querySelector("#walletList"),
   nameForm: document.querySelector("#nameForm"),
   nameInput: document.querySelector("#characterNameInput"),
   turnstileSlot: document.querySelector("#turnstileSlot"),
+  onlinePlayersMetric: document.querySelector("#onlinePlayersMetric"),
+  recordMetric: document.querySelector("#recordMetric"),
   playLinks: [
-    document.querySelector("#navPlayLink"),
     document.querySelector("#heroPlayLink"),
     document.querySelector("#footerPlayLink"),
   ].filter(Boolean),
@@ -27,13 +30,30 @@ async function initLanding() {
   lockPlay();
   await loadAuthConfig();
   await refreshSession();
+  await refreshHeroMetrics();
   renderWallets();
-  ui.connect?.addEventListener("click", connectSelectedWallet);
+  ui.connect?.addEventListener("click", openWalletModal);
+  document.querySelectorAll("[data-close-wallet-modal]").forEach((element) => element.addEventListener("click", closeWalletModal));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeWalletModal();
+  });
   ui.nameForm?.addEventListener("submit", saveName);
   for (const link of ui.playLinks) {
     link.addEventListener("click", (event) => {
       if (!profile || profile.needsName) event.preventDefault();
     });
+  }
+}
+
+async function refreshHeroMetrics() {
+  try {
+    const response = await fetch("/api/legends");
+    const legends = await response.json();
+    if (ui.onlinePlayersMetric) ui.onlinePlayersMetric.textContent = formatCount(legends.online || 0);
+    if (ui.recordMetric) ui.recordMetric.textContent = `Lvl ${legends.records?.maxLevel || 1}`;
+  } catch {
+    if (ui.onlinePlayersMetric) ui.onlinePlayersMetric.textContent = "0";
+    if (ui.recordMetric) ui.recordMetric.textContent = "Lvl 1";
   }
 }
 
@@ -68,21 +88,33 @@ async function refreshSession() {
 
 function renderWallets() {
   const wallets = detectWallets();
-  selectedWallet = wallets[0] || null;
   if (!ui.walletList) return;
   ui.walletList.innerHTML = "";
-  for (const wallet of wallets) {
+  for (const walletName of WALLET_CHOICES) {
+    const wallet = wallets.find((candidate) => walletMatchesChoice(candidate.name, walletName));
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = wallet.name;
-    button.className = wallet === selectedWallet ? "is-selected" : "";
+    button.textContent = walletName;
+    if (!wallet) button.className = "is-unavailable";
     button.addEventListener("click", () => {
+      if (!wallet) {
+        setStatus(`${walletName} is not detected. Install it first, then try again.`);
+        return;
+      }
       selectedWallet = wallet;
-      renderWallets();
+      connectSelectedWallet();
     });
     ui.walletList.append(button);
   }
-  if (!wallets.length) setStatus("Install Phantom, Jupiter, Solflare, or Backpack to connect.");
+}
+
+function openWalletModal() {
+  renderWallets();
+  ui.modal?.classList.remove("hidden");
+}
+
+function closeWalletModal() {
+  ui.modal?.classList.add("hidden");
 }
 
 async function connectSelectedWallet() {
@@ -141,12 +173,14 @@ function updateProfileUi() {
   if (profile.needsName) {
     lockPlay();
     ui.nameForm?.classList.remove("hidden");
+    openWalletModal();
     setStatus("Choose a unique character name.");
     return;
   }
   ui.nameForm?.classList.add("hidden");
   unlockPlay();
   setStatus(`Connected as ${profile.characterName}.`);
+  closeWalletModal();
 }
 
 function lockPlay() {
@@ -165,6 +199,10 @@ function unlockPlay() {
 
 function setStatus(text) {
   if (ui.status) ui.status.textContent = text;
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
 function detectWallets() {
@@ -243,6 +281,11 @@ function addWallet(list, seen, wallet) {
 function walletRank(name) {
   const index = PREFERRED_WALLETS.findIndex((candidate) => name.toLowerCase().includes(candidate.toLowerCase().split(" ")[0]));
   return index === -1 ? 99 : index;
+}
+
+function walletMatchesChoice(name, choice) {
+  if (choice === "Jup Wallet") return /jup|jupiter/i.test(name);
+  return name.toLowerCase().includes(choice.toLowerCase());
 }
 
 async function getTurnstileToken() {
