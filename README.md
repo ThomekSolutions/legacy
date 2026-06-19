@@ -18,7 +18,7 @@ Then open:
 
 ## Deploy On Render
 
-This repo includes a `render.yaml` Blueprint for Render.
+This repo includes a `render.yaml` Blueprint for a free Render Web Service.
 
 1. Push the repository to GitHub.
 2. In Render, create a new Blueprint from the repo.
@@ -26,7 +26,7 @@ This repo includes a `render.yaml` Blueprint for Render.
 4. Optionally set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` if bot verification is enabled.
 5. Deploy.
 
-The Blueprint mounts a persistent disk at `/var/data` and sets `DATA_DIR=/var/data`, so `legacy-state.json` survives deploys and restarts.
+The free Blueprint does not use a persistent disk, so `legacy-state.json` can be reset by Render restarts or redeploys. Add a Render disk and set `DATA_DIR=/var/data` later if you upgrade to a paid instance.
 
 ## Current Gameplay
 
