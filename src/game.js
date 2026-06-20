@@ -20,8 +20,12 @@ const ui = {
   inventoryShardsTab: document.querySelector("#inventoryShardsTab"),
   forgeHint: document.querySelector("#forgeHint"),
   forgeHintButton: document.querySelector("#forgeHintButton"),
+  chestHint: document.querySelector("#chestHint"),
+  chestHintButton: document.querySelector("#chestHintButton"),
   forgePanel: document.querySelector("#forgePanel"),
   forgeClose: document.querySelector("#forgeClose"),
+  chestPanel: document.querySelector("#chestPanel"),
+  chestClose: document.querySelector("#chestClose"),
   forgeRefineTab: document.querySelector("#forgeRefineTab"),
   forgeCraftTab: document.querySelector("#forgeCraftTab"),
   forgeRefinePanel: document.querySelector("#forgeRefinePanel"),
@@ -34,6 +38,14 @@ const ui = {
   inventorySlots: document.querySelector("#inventorySlots"),
   resourceSlots: document.querySelector("#resourceSlots"),
   equipmentSlots: document.querySelector("#equipmentSlots"),
+  chestSlots: document.querySelector("#chestSlots"),
+  chestCarriedGold: document.querySelector("#chestCarriedGold"),
+  chestStoredGold: document.querySelector("#chestStoredGold"),
+  chestGoldAmount: document.querySelector("#chestGoldAmount"),
+  chestDepositGold: document.querySelector("#chestDepositGold"),
+  chestWithdrawGold: document.querySelector("#chestWithdrawGold"),
+  chestDepositAllGold: document.querySelector("#chestDepositAllGold"),
+  chestWithdrawAllGold: document.querySelector("#chestWithdrawAllGold"),
   inventoryGold: document.querySelector("#inventoryGold"),
   itemMenu: document.querySelector("#itemMenu"),
   itemInspect: document.querySelector("#itemInspect"),
@@ -75,6 +87,7 @@ const HUB_BUILDINGS = [
   { key: "hub-marketplace", path: "assets/hub/marketplace.png", x: 52, y: 42, size: 174, groundY: 0.78 },
   { key: "hub-leaderboard", path: "assets/hub/leaderboard.png", x: 40, y: 30, size: 174, groundY: 0.78 },
   { key: "hub-wishing-well", path: "assets/hub/wishing-well.png", x: 40, y: 54, size: 123, groundY: 0.78 },
+  { key: "hub-chest", path: "assets/hub/chest.png", x: 52, y: 54, size: 128, groundY: 0.78 },
 ];
 const EQUIPMENT_SLOT_LABELS = {
   helmet: "Helmet",
@@ -123,7 +136,12 @@ let gameScene = null;
 let selectedForgeItemId = "";
 let inventoryTab = "equipment";
 let forgeTab = "refine";
-let selectedShardItemId = "";
+let wasChestNearby = false;
+let dragState = null;
+let armedShardItemId = "";
+let keepShardArmedAfterSuccess = false;
+let forgeApplyPending = false;
+let dragClickSuppressedUntil = 0;
 const mobileInput = {
   enabled: false,
   movePointerId: null,
@@ -1149,6 +1167,10 @@ async function requireSession() {
     const response = await fetch("/api/session", { headers });
     const result = await response.json();
     if (!response.ok || !result.profile || result.profile.needsName) throw new Error("Session incomplete");
+    if (result.sessionToken) {
+      sessionToken = result.sessionToken;
+      localStorage.setItem(SESSION_KEY, sessionToken);
+    }
     return result;
   } catch {
     localStorage.removeItem(SESSION_KEY);
@@ -1190,10 +1212,27 @@ function connect() {
         if (gameScene) gameScene.worldBuilt = false;
       }
       snapshot = { ...msg.snapshot, tiles: worldTiles };
+      logChestNearby(snapshot);
       pushSnapshot(snapshot);
       meta = msg.meta;
       legends = msg.legends;
+      syncArmedShard();
       updateSidebar();
+      return;
+    }
+
+    if (msg.t === "pickup") {
+      if (msg.kind === "resource") pushLog(`Picked up +${msg.amount || 1} ${msg.name || "resource"}.`);
+      else pushLog(`Picked up ${msg.name || "item"}.`);
+      return;
+    }
+
+    if (msg.t === "forgeResult") {
+      pushLog(msg.message || (msg.ok ? "Shard applied." : "Shard failed."));
+      forgeApplyPending = false;
+      if (msg.ok && !keepShardArmedAfterSuccess) cancelArmedShard();
+      keepShardArmedAfterSuccess = false;
+      renderForge();
       return;
     }
 
@@ -1203,6 +1242,7 @@ function connect() {
       ui.deathSummary.textContent = `Level ${msg.grave.level}, ${msg.grave.kills} kills, survived ${msg.grave.lifeSeconds}s. Cause: ${msg.grave.cause}.`;
       closePanel(ui.inventoryPanel);
       closePanel(ui.characterPanel);
+      closePanel(ui.chestPanel);
       closeItemMenu();
       closeInspect();
       ui.deathScreen.classList.remove("hidden");
@@ -1304,9 +1344,20 @@ function updateSidebar() {
   if (ui.inventoryGold) ui.inventoryGold.textContent = self?.gold ?? 0;
   ui.log.innerHTML = logs.slice(0, 4).map((entry) => `<li>${escapeHtml(entry)}</li>`).join("");
   if (ui.forgeHint) ui.forgeHint.classList.toggle("hidden", !snapshot?.forgeNearby || isOverlayOpen());
+  if (ui.chestHint) ui.chestHint.classList.toggle("hidden", !snapshot?.chestNearby || isOverlayOpen());
   renderInventory();
   renderEquipment();
   renderForge();
+  renderChest();
+}
+
+function logChestNearby(nextSnapshot) {
+  const chestNearby = Boolean(nextSnapshot?.chestNearby);
+  if (chestNearby && !wasChestNearby) {
+    logs.unshift("Chest nearby. Press E to open it.");
+    logs = logs.slice(0, 8);
+  }
+  wasChestNearby = chestNearby;
 }
 
 function pushLog(text) {
@@ -1322,6 +1373,12 @@ function setupGamePanels() {
   ui.inventoryShardsTab?.addEventListener("click", () => setInventoryTab("shards"));
   ui.forgeClose?.addEventListener("click", () => closePanel(ui.forgePanel));
   ui.forgeHintButton?.addEventListener("click", () => openForge());
+  ui.chestClose?.addEventListener("click", () => closePanel(ui.chestPanel));
+  ui.chestHintButton?.addEventListener("click", () => openChest());
+  ui.chestDepositGold?.addEventListener("click", () => sendChestGold("chestDepositGold", readChestGoldAmount()));
+  ui.chestWithdrawGold?.addEventListener("click", () => sendChestGold("chestWithdrawGold", readChestGoldAmount()));
+  ui.chestDepositAllGold?.addEventListener("click", () => sendChestGold("chestDepositGold", getSelf()?.gold || 0));
+  ui.chestWithdrawAllGold?.addEventListener("click", () => sendChestGold("chestWithdrawGold", snapshot?.chestGold || 0));
   ui.forgeRefineTab?.addEventListener("click", () => setForgeTab("refine"));
   ui.forgeCraftTab?.addEventListener("click", () => setForgeTab("craft"));
   ui.characterClose?.addEventListener("click", () => closePanel(ui.characterPanel));
@@ -1329,18 +1386,24 @@ function setupGamePanels() {
   window.addEventListener("click", (event) => {
     if (!event.target.closest?.(".item-menu")) closeItemMenu();
     if (!event.target.closest?.(".item-slot, .equipment-item, .resource-slot, .forge-item")) hideItemTooltip();
+    if (armedShardItemId && !event.target.closest?.(".resource-slot, .item-slot, .equipment-item, .forge-item, .panel-tabs")) cancelArmedShard();
   });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      cancelArmedShard();
       closeItemMenu();
       closeInspect();
       closePanel(ui.inventoryPanel);
       closePanel(ui.forgePanel);
+      closePanel(ui.chestPanel);
       closePanel(ui.characterPanel);
     }
-    if ((event.key === "e" || event.key === "E") && snapshot?.forgeNearby && !isOverlayOpen()) {
+    if ((event.key === "e" || event.key === "E") && snapshot?.forgeNearby && !isBlockingInteractionOpen()) {
       event.preventDefault();
       openForge();
+    } else if ((event.key === "e" || event.key === "E") && snapshot?.chestNearby && !isBlockingInteractionOpen()) {
+      event.preventDefault();
+      openChest();
     }
   });
 }
@@ -1362,6 +1425,7 @@ function renderInventory() {
   ui.equipmentSlots?.classList.toggle("hidden", inventoryTab !== "equipment");
   ui.inventorySlots.classList.toggle("hidden", inventoryTab !== "equipment");
   ui.resourceSlots.classList.toggle("hidden", inventoryTab !== "shards");
+  ui.inventoryPanel.dataset.dropTarget = "player";
   const inventory = snapshot?.inventory || [];
   const size = snapshot?.inventorySize || 10;
   ui.inventorySlots.innerHTML = "";
@@ -1376,7 +1440,10 @@ function renderInventory() {
       slot.innerHTML = itemMarkup(item);
       slot.title = `${item.name} - ${EQUIPMENT_SLOT_LABELS[item.type] || item.typeLabel}`;
       bindItemTooltip(slot, item);
-      slot.addEventListener("dblclick", () => sendItemAction("equipItem", item.uid));
+      bindDraggableItem(slot, item, "player");
+      slot.addEventListener("dblclick", () => {
+        sendItemAction("equipItem", item.uid);
+      });
       slot.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         openItemMenu(item, event.clientX, event.clientY);
@@ -1397,8 +1464,18 @@ function renderResourceInventory() {
     slot.type = "button";
     slot.className = "resource-slot";
     slot.dataset.rarity = item.rarity;
+    slot.classList.toggle("is-selected", item.uid === armedShardItemId);
     slot.innerHTML = resourceMarkup(item);
-    bindItemTooltip(slot, item);
+    bindItemTooltip(slot, item, item.resourceKind === "shard" ? "Use shards at the forge." : "");
+    bindDraggableItem(slot, item, "player");
+    const promptForgeUse = (event) => {
+      if (Date.now() < dragClickSuppressedUntil) return;
+      if (item.resourceKind !== "shard") return;
+      event.preventDefault();
+      pushLog(snapshot?.forgeNearby ? "Open the forge to use shards." : "Move to the forge to use shards.");
+    };
+    slot.addEventListener("click", promptForgeUse);
+    slot.addEventListener("contextmenu", promptForgeUse);
     ui.resourceSlots.append(slot);
   }
 }
@@ -1421,9 +1498,200 @@ function renderEquipment() {
     if (item) {
       const itemNode = slot.querySelector(".equipment-item");
       bindItemTooltip(itemNode, item);
+      bindDraggableItem(itemNode, item, "equipment");
+      itemNode.addEventListener("dblclick", () => sendItemAction("unequipItem", item.uid));
     }
     ui.equipmentSlots.append(slot);
   }
+}
+
+function renderChest() {
+  if (!ui.chestPanel || ui.chestPanel.classList.contains("hidden") || !ui.chestSlots) return;
+  const items = snapshot?.chestItems || [];
+  const size = snapshot?.chestSize || 20;
+  const self = getSelf();
+  if (ui.chestCarriedGold) ui.chestCarriedGold.textContent = self?.gold ?? 0;
+  if (ui.chestStoredGold) ui.chestStoredGold.textContent = snapshot?.chestGold ?? 0;
+  ui.chestSlots.innerHTML = "";
+  ui.chestPanel.dataset.dropTarget = "chest";
+  bindDropTarget(ui.chestSlots, "chest");
+  for (let i = 0; i < size; i += 1) {
+    const item = items[i] || null;
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = item?.type === "resource" ? "resource-slot chest-slot" : "item-slot chest-slot";
+    slot.dataset.index = String(i);
+    if (item) {
+      slot.dataset.rarity = item.rarity;
+      slot.innerHTML = item.type === "resource" ? resourceMarkup(item) : itemMarkup(item);
+      bindItemTooltip(slot, item);
+      bindDraggableItem(slot, item, "chest");
+      slot.addEventListener("dblclick", () => sendChestAction("chestWithdraw", item.uid));
+    }
+    ui.chestSlots.append(slot);
+  }
+  bindDropTarget(ui.inventorySlots, "player");
+  bindDropTarget(ui.resourceSlots, "player");
+}
+
+function bindDraggableItem(element, item, source) {
+  if (!element || !item) return;
+  element.dataset.dragItemId = item.uid;
+  element.dataset.dragSource = source;
+  element.addEventListener("pointerdown", (event) => startPointerDrag(event, element, item, source));
+}
+
+function bindDropTarget(element, target) {
+  if (!element) return;
+  element.dataset.dropTarget = target;
+}
+
+function startPointerDrag(event, element, item, source) {
+  if (event.button !== undefined && event.button !== 0) return;
+  if (event.pointerType === "mouse" && event.detail > 1) return;
+  dragState = {
+    itemId: item.uid,
+    source,
+    item,
+    element,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    preview: null,
+    target: null,
+  };
+  element.setPointerCapture?.(event.pointerId);
+  window.addEventListener("pointermove", updatePointerDrag, { passive: false });
+  window.addEventListener("pointerup", finishPointerDrag, { once: true });
+  window.addEventListener("pointercancel", cancelPointerDrag, { once: true });
+}
+
+function updatePointerDrag(event) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  const moved = Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY);
+  if (!dragState.active && moved < 6) return;
+  event.preventDefault();
+  if (!dragState.active) {
+    dragState.active = true;
+    dragState.element.classList.add("is-dragging");
+    dragState.preview = document.createElement("div");
+    dragState.preview.className = "drag-preview";
+    dragState.preview.innerHTML = dragState.item.type === "resource" ? resourceMarkup(dragState.item) : itemMarkup(dragState.item);
+    document.body.append(dragState.preview);
+  }
+  moveDragPreview(event.clientX, event.clientY);
+  setActiveDropTarget(dropTargetAt(event.clientX, event.clientY));
+}
+
+function finishPointerDrag(event) {
+  if (!dragState) return;
+  if (event.pointerId !== dragState.pointerId) return cancelPointerDrag();
+  const state = dragState;
+  const target = state.active ? dropTargetAt(event.clientX, event.clientY) : null;
+  if (state.active) dragClickSuppressedUntil = Date.now() + 250;
+  cancelPointerDrag();
+  if (!state.active || !target || target === state.source) return;
+  if (state.source === "chest" && target === "player") sendChestAction("chestWithdraw", state.itemId);
+  if (state.source === "player" && target === "chest") sendChestAction("chestDeposit", state.itemId);
+  if (state.source === "equipment" && target === "player") sendItemAction("unequipItem", state.itemId);
+  if (state.source === "equipment" && target === "chest") sendChestAction("chestDeposit", state.itemId);
+}
+
+function cancelPointerDrag() {
+  if (!dragState) return;
+  dragState.element.classList.remove("is-dragging");
+  dragState.preview?.remove();
+  setActiveDropTarget(null);
+  dragState = null;
+  window.removeEventListener("pointermove", updatePointerDrag);
+}
+
+function moveDragPreview(x, y) {
+  if (!dragState?.preview) return;
+  dragState.preview.style.left = `${x + 12}px`;
+  dragState.preview.style.top = `${y + 12}px`;
+}
+
+function dropTargetAt(x, y) {
+  const preview = dragState?.preview;
+  if (preview) preview.style.display = "none";
+  const target = document.elementFromPoint(x, y)?.closest?.("[data-drop-target]")?.dataset.dropTarget || "";
+  if (preview) preview.style.display = "";
+  return target;
+}
+
+function setActiveDropTarget(target) {
+  if (dragState?.target === target) return;
+  document.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
+  dragState.target = target;
+  if (target) document.querySelector(`[data-drop-target="${target}"]`)?.classList.add("is-drop-target");
+}
+
+function allShardStacks() {
+  return (snapshot?.resources || []).filter((item) => item.resourceKind === "shard");
+}
+
+function findArmedShard() {
+  return allShardStacks().find((item) => item.uid === armedShardItemId) || null;
+}
+
+function syncArmedShard() {
+  if (armedShardItemId && !findArmedShard()) cancelArmedShard();
+  renderArmedShardState();
+}
+
+function armShard(itemId) {
+  armedShardItemId = itemId;
+  const shard = findArmedShard();
+  if (shard) pushLog(`Using ${shard.name}. Click forge equipment to apply it.`);
+  renderArmedShardState();
+  renderForge();
+}
+
+function cancelArmedShard() {
+  if (!armedShardItemId) return;
+  armedShardItemId = "";
+  renderArmedShardState();
+  renderForge();
+}
+
+function renderArmedShardState() {
+  const shard = findArmedShard();
+  document.body.classList.toggle("is-shard-armed", Boolean(shard));
+  document.body.dataset.armedShard = shard?.name || "";
+}
+
+function decorateShardTarget(element, item) {
+  if (!element || !armedShardItemId) return;
+  const shard = findArmedShard();
+  if (!shard) return;
+  const compatibility = canApplyShardClient(shard, item);
+  element.classList.toggle("is-compatible", compatibility.ok);
+  element.classList.toggle("is-incompatible", !compatibility.ok);
+}
+
+function handleEquipmentClickForShard(event, item) {
+  if (!armedShardItemId) return;
+  if (Date.now() < dragClickSuppressedUntil) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const shard = findArmedShard();
+  if (!shard) {
+    cancelArmedShard();
+    return;
+  }
+  const compatibility = canApplyShardClient(shard, item);
+  if (!compatibility.ok) {
+    pushLog(compatibility.reason || "Shard cannot be applied.");
+    return;
+  }
+  sendForgeApplyShard(shard, item, event.shiftKey);
+}
+
+function handleForgeEquipmentPointerUp(event, item) {
+  if (!armedShardItemId || event.button > 0) return;
+  handleEquipmentClickForShard(event, item);
 }
 
 function itemMarkup(item) {
@@ -1547,9 +1815,22 @@ function openForge() {
   closeItemMenu();
   closeInspect();
   closePanel(ui.inventoryPanel);
+  closePanel(ui.chestPanel);
   ui.forgePanel.classList.remove("hidden");
   setForgeTab(forgeTab);
   renderForge();
+}
+
+function openChest() {
+  if (!snapshot?.chestNearby || !ui.chestPanel) return;
+  closeItemMenu();
+  closeInspect();
+  closePanel(ui.forgePanel);
+  ui.inventoryPanel?.classList.remove("hidden");
+  ui.chestPanel.classList.remove("hidden");
+  renderInventory();
+  renderEquipment();
+  renderChest();
 }
 
 function renderForge() {
@@ -1563,11 +1844,7 @@ function renderForge() {
 }
 
 function forgeItems() {
-  const inventory = (snapshot?.inventory || []).map((item) => ({ item, source: "Bag" }));
-  const equipment = Object.entries(snapshot?.equipment || {})
-    .filter(([, item]) => item)
-    .map(([slot, item]) => ({ item, source: EQUIPMENT_SLOT_LABELS[slot] || slot }));
-  return [...equipment, ...inventory];
+  return (snapshot?.inventory || []).map((item) => ({ item, source: "Bag" }));
 }
 
 function renderForgeRefine() {
@@ -1603,24 +1880,31 @@ function renderForgeCraft() {
   if (!ui.forgeShards || !ui.forgeEquipment) return;
   const shards = (snapshot?.resources || []).filter((item) => item.resourceKind === "shard");
   const equipment = forgeItems();
-  if (!shards.some((item) => item.uid === selectedShardItemId)) selectedShardItemId = "";
-  const selectedShard = shards.find((item) => item.uid === selectedShardItemId) || null;
-  ui.forgeShards.innerHTML = shards.length ? "" : `<p class="hint">No shards available.</p>`;
+  const selectedShard = findArmedShard();
+  if (!shards.some((item) => item.uid === armedShardItemId)) armedShardItemId = "";
+  ui.forgeShards.innerHTML = `
+    <div class="forge-cursor ${selectedShard ? "is-armed" : ""}">
+      <span>Currency cursor</span>
+      <strong>${selectedShard ? escapeHtml(selectedShard.name) : "Empty"}</strong>
+      <small>${selectedShard ? "Click a compatible item. Hold Shift to keep using the stack." : "Click a shard to pick it up, then click equipment."}</small>
+    </div>
+  `;
+  if (!shards.length) ui.forgeShards.insertAdjacentHTML("beforeend", `<p class="hint">No shards available.</p>`);
   for (const item of shards) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "forge-item resource-slot";
     button.dataset.rarity = item.rarity;
-    button.classList.toggle("is-selected", item.uid === selectedShardItemId);
+    button.dataset.resourceId = item.resourceId;
+    button.classList.toggle("is-selected", item.uid === armedShardItemId);
     button.innerHTML = resourceMarkup(item);
-    bindItemTooltip(button, item, item.uid === selectedShardItemId ? "Selected shard" : "Right-click or tap to select");
-    const select = (event) => {
+    bindItemTooltip(button, item, item.uid === armedShardItemId ? "Currency cursor loaded. Click equipment to apply it." : "Click this shard, then click equipment to apply it.");
+    const arm = (event) => {
       event.preventDefault();
-      selectedShardItemId = item.uid;
-      renderForgeCraft();
+      armShard(item.uid);
     };
-    button.addEventListener("contextmenu", select);
-    button.addEventListener("click", select);
+    button.addEventListener("contextmenu", arm);
+    button.addEventListener("click", arm);
     ui.forgeShards.append(button);
   }
   ui.forgeEquipment.innerHTML = equipment.length ? "" : `<p class="hint">No equipment available.</p>`;
@@ -1630,13 +1914,24 @@ function renderForgeCraft() {
     button.type = "button";
     button.className = "forge-item";
     button.dataset.rarity = item.rarity;
+    button.dataset.itemId = item.uid;
+    button.dataset.itemRarity = item.rarity;
     button.classList.toggle("is-compatible", Boolean(selectedShard && compatibility.ok));
     button.classList.toggle("is-incompatible", Boolean(selectedShard && !compatibility.ok));
-    button.innerHTML = `<img src="${escapeHtml(item.icon)}" alt="" draggable="false" /><span>${escapeHtml(source)}</span><strong>${escapeHtml(item.name)}</strong>`;
-    bindItemTooltip(button, item, selectedShard ? compatibility.reason : "Select a shard first");
-    button.addEventListener("click", () => {
-      if (selectedShard && compatibility.ok) sendForgeApplyShard(selectedShard, item);
+    button.innerHTML = `
+      <img src="${escapeHtml(item.icon)}" alt="" draggable="false" />
+      <span>${escapeHtml(source)}${selectedShard ? ` - ${compatibility.ok ? "compatible" : escapeHtml(compatibility.reason)}` : " - waiting for currency"}</span>
+      <strong>${escapeHtml(item.name)}</strong>
+    `;
+    bindItemTooltip(button, item, selectedShard ? compatibility.reason || "Click to apply the armed shard" : "Select a shard first");
+    button.addEventListener("click", (event) => {
+      if (armedShardItemId) {
+        handleEquipmentClickForShard(event, item);
+        return;
+      }
+      pushLog("Right-click a shard first.");
     });
+    button.addEventListener("pointerup", (event) => handleForgeEquipmentPointerUp(event, item));
     ui.forgeEquipment.append(button);
   }
 }
@@ -1661,10 +1956,19 @@ function canApplyShardClient(shard, item) {
   return { ok: true, reason: "" };
 }
 
-function sendForgeApplyShard(shard, item) {
-  if (!ws || ws.readyState !== WebSocket.OPEN || !shard || !item) return;
-  const firstAffix = (item.affixes || []).find((affix) => !affix.locked) || (item.affixes || [])[0];
-  ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: shard.uid, targetItemId: item.uid, affixId: firstAffix?.id || "" }));
+function sendForgeApplyShard(shard, item, keepArmed = false) {
+  if (forgeApplyPending) return;
+  forgeApplyPending = true;
+  keepShardArmedAfterSuccess = Boolean(keepArmed);
+  sendApplyShard(shard, item, "forgeApplyShard");
+}
+
+function sendApplyShard(shard, item, type = "applyShard") {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !shard || !item) {
+    forgeApplyPending = false;
+    return;
+  }
+  ws.send(JSON.stringify({ t: type, shardItemId: shard.uid, targetItemId: item.uid }));
 }
 
 function sendForgeConvertFragment(fragmentItemId) {
@@ -1691,14 +1995,35 @@ function sendItemAction(type, itemId) {
   ws.send(JSON.stringify({ t: type, itemId }));
 }
 
+function sendChestAction(type, itemId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !itemId) return;
+  ws.send(JSON.stringify({ t: type, itemId }));
+}
+
+function readChestGoldAmount() {
+  return Math.max(0, Math.floor(Number(ui.chestGoldAmount?.value) || 0));
+}
+
+function sendChestGold(type, amount) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const value = Math.max(0, Math.floor(Number(amount) || 0));
+  if (value <= 0) {
+    pushLog("Enter a gold amount first.");
+    return;
+  }
+  ws.send(JSON.stringify({ t: type, amount: value }));
+}
+
 function togglePanel(panel) {
   if (!panel) return;
   panel.classList.toggle("hidden");
+  if (panel === ui.inventoryPanel && panel.classList.contains("hidden")) cancelArmedShard();
   closeItemMenu();
 }
 
 function closePanel(panel) {
   panel?.classList.add("hidden");
+  if (panel === ui.inventoryPanel || panel === ui.forgePanel) cancelArmedShard();
 }
 
 function closeItemMenu() {
@@ -1946,7 +2271,14 @@ function isOverlayOpen() {
     || Boolean(ui.deathScreen && !ui.deathScreen.classList.contains("hidden"))
     || Boolean(ui.inventoryPanel && !ui.inventoryPanel.classList.contains("hidden"))
     || Boolean(ui.forgePanel && !ui.forgePanel.classList.contains("hidden"))
+    || Boolean(ui.chestPanel && !ui.chestPanel.classList.contains("hidden"))
     || Boolean(ui.characterPanel && !ui.characterPanel.classList.contains("hidden"))
+    || Boolean(ui.itemInspect && !ui.itemInspect.classList.contains("hidden"));
+}
+
+function isBlockingInteractionOpen() {
+  return Boolean(ui.startScreen && !ui.startScreen.classList.contains("hidden"))
+    || Boolean(ui.deathScreen && !ui.deathScreen.classList.contains("hidden"))
     || Boolean(ui.itemInspect && !ui.itemInspect.classList.contains("hidden"));
 }
 

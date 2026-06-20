@@ -5,7 +5,8 @@ const { spawn } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
 const ARTIFACTS = path.join(ROOT, "artifacts");
-const URL = "http://localhost:3000/play.html";
+const PORT = 3142;
+const URL = `http://localhost:${PORT}/play.html`;
 const CHROME = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 
 fs.mkdirSync(ARTIFACTS, { recursive: true });
@@ -16,26 +17,28 @@ main().catch((error) => {
 });
 
 async function main() {
-  let server = null;
-  if (!(await urlOk(URL))) {
-    server = spawn(process.execPath, ["server.js"], {
-      cwd: ROOT,
-      stdio: ["ignore", "ignore", "ignore"],
-      windowsHide: true,
-    });
+  const dataDir = path.join(ARTIFACTS, "inventory-ui-data");
+  fs.rmSync(dataDir, { recursive: true, force: true });
+  const server = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: { ...process.env, PORT: String(PORT), LEGACY_TEST_MODE: "1", DATA_DIR: dataDir },
+    stdio: ["ignore", "ignore", "ignore"],
+    windowsHide: true,
+  });
+  try {
     await waitFor(() => urlOk(URL), 5000, "server");
+
+    const desktop = await auditViewport(1280, 720, "inventory-desktop-audit.png", 9343);
+    const mobile = await auditViewport(390, 844, "inventory-mobile-audit.png", 9344);
+
+    const result = { desktop, mobile };
+    fs.writeFileSync(path.join(ARTIFACTS, "inventory-audit.json"), `${JSON.stringify(result, null, 2)}\n`);
+    assertAudit("desktop", desktop.audit);
+    assertAudit("mobile", mobile.audit);
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    server.kill();
   }
-
-  const desktop = await auditViewport(1280, 720, "inventory-desktop-audit.png", 9343);
-  const mobile = await auditViewport(390, 844, "inventory-mobile-audit.png", 9344);
-
-  if (server) server.kill();
-
-  const result = { desktop, mobile };
-  fs.writeFileSync(path.join(ARTIFACTS, "inventory-audit.json"), `${JSON.stringify(result, null, 2)}\n`);
-  assertAudit("desktop", desktop.audit);
-  assertAudit("mobile", mobile.audit);
-  console.log(JSON.stringify(result, null, 2));
 }
 
 async function auditViewport(width, height, screenshotName, port) {
@@ -76,10 +79,10 @@ async function auditViewport(width, height, screenshotName, port) {
     await cdp.send("Page.navigate", { url: URL });
     await delay(900);
     await delay(2200);
-    const clickResult = await cdp.send("Runtime.evaluate", { expression: clickScript(), awaitPromise: true, returnByValue: true });
-    if (clickResult.result.value !== true) throw new Error("Start screen did not close before inventory audit");
+    await openInventoryForAudit(cdp);
     await delay(350);
-    await cdp.send("Runtime.evaluate", { expression: waitForInventoryScript(), awaitPromise: true });
+    await waitForInventory(cdp);
+    const shardFlow = width >= 760 ? await runShardUiFlow(cdp) : { skipped: true };
     const auditResult = await cdp.send("Runtime.evaluate", {
       expression: `(${auditScript})()`,
       returnByValue: true,
@@ -88,41 +91,118 @@ async function auditViewport(width, height, screenshotName, port) {
     const screenshotPath = path.join(ARTIFACTS, screenshotName);
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, "base64"));
     cdp.close();
-    return { screenshotPath, audit: auditResult.result.value };
+    return { screenshotPath, audit: auditResult.result.value, shardFlow };
   } finally {
     chrome.kill();
   }
 }
 
-function clickScript() {
-  return `new Promise((resolve) => {
-    const startedAt = Date.now();
-    const tick = () => {
-      const connected = typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN;
-      if (connected || document.querySelector('#inventoryButton')) {
-        document.querySelector('#inventoryButton')?.click();
-        setTimeout(() => resolve(true), 160);
-        return;
-      }
-      if (Date.now() - startedAt > 1400) {
-        if (typeof connect === 'function') connect();
-        if (!document.querySelector('#equipmentSlots')?.children.length) {
-          const labels = { helmet: 'Helmet', chest: 'Chest', gloves: 'Gloves', boots: 'Boots', weapon: 'Weapon' };
-          document.querySelector('#equipmentSlots').innerHTML = Object.entries(labels).map(([id, label]) => '<div class="equipment-slot equipment-slot--' + id + '" data-slot="' + id + '"><span>' + label + '</span><div class="equipment-item"><em>' + label + '</em></div></div>').join('');
-        }
-        if (!document.querySelector('#inventorySlots')?.children.length) {
-          document.querySelector('#inventorySlots').innerHTML = Array.from({ length: 10 }, (_, index) => '<button type="button" class="item-slot" data-index="' + index + '"></button>').join('');
-        }
-        document.querySelector('#inventoryPanel')?.classList.remove('hidden');
-      }
-      if (Date.now() - startedAt > 5000) {
-        resolve(false);
-        return;
-      }
-      setTimeout(tick, 80);
+async function runShardUiFlow(cdp) {
+  const result = await cdp.send("Runtime.evaluate", {
+    expression: `(${shardUiFlowScript})()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const value = result.result.value;
+  if (!value?.ok) throw new Error(`shard UI flow failed: ${JSON.stringify(value)}`);
+  return value;
+}
+
+async function shardUiFlowScript() {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const waitFor = async (predicate, label, timeout = 6000) => {
+    const startedAt = performance.now();
+    while (performance.now() - startedAt < timeout) {
+      if (predicate()) return true;
+      await sleep(40);
+    }
+    throw new Error(label);
+  };
+  try {
+    await waitFor(() => typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN && snapshot?.id, "socket ready");
+    closePanel(document.querySelector("#inventoryPanel"));
+    ws.send(JSON.stringify({ t: "input", dx: 0, dy: 0, attack: false, angle: 0, testWarp: { x: 28 * 32, y: 42 * 32 } }));
+    ws.send(JSON.stringify({ t: "testGiveCurrency", kind: "fragment", id: "magic", amount: 5 }));
+    ws.send(JSON.stringify({ t: "testGiveItem", rarity: "common", depth: 10 }));
+    await waitFor(() => (
+      snapshot?.forgeNearby
+      && (snapshot.resources || []).some((item) => item.resourceKind === "fragment" && item.resourceId === "magic" && item.stack >= 5)
+      && (snapshot.inventory || []).some((item) => item.rarity === "common")
+    ), "forge setup ready");
+
+    openForge();
+    setForgeTab("refine");
+    await sleep(120);
+    const fragmentButton = [...document.querySelectorAll("#forgeFragments .forge-item")].find((el) => /Magic Fragment/.test(el.textContent));
+    if (!fragmentButton) throw new Error("magic fragment refine button missing");
+    fragmentButton.click();
+    await waitFor(() => (
+      logs.some((entry) => /Converted 5 Magic Fragments into Transmutation Shard/.test(entry))
+      && (snapshot.resources || []).some((item) => item.resourceKind === "shard" && item.resourceId === "transmutation")
+    ), "refine conversion log missing");
+
+    setForgeTab("craft");
+    await sleep(160);
+    const shardButton = [...document.querySelectorAll("#forgeShards .forge-item")].find((el) => el.dataset.resourceId === "transmutation");
+    if (!shardButton) throw new Error("transmutation shard button missing");
+    shardButton.click();
+    await waitFor(() => document.body.classList.contains("is-shard-armed") && /Transmutation Shard/.test(document.body.dataset.armedShard || ""), "transmutation shard did not arm");
+    const commonTarget = [...document.querySelectorAll("#forgeEquipment .forge-item")].find((el) => el.dataset.itemRarity === "common");
+    if (!commonTarget) throw new Error("common forge target missing");
+    if (!commonTarget.classList.contains("is-compatible")) throw new Error("common target was not highlighted as compatible");
+    const targetId = commonTarget.dataset.itemId;
+    commonTarget.click();
+    await waitFor(() => logs.some((entry) => /Transmutation Shard applied/i.test(entry)) && (snapshot.inventory || []).some((item) => item.uid === targetId && item.rarity === "magic"), "forge transmutation application did not complete");
+    closePanel(document.querySelector("#forgePanel"));
+    document.querySelector("#inventoryPanel")?.classList.remove("hidden");
+    renderInventory();
+    renderEquipment();
+    return { ok: true, targetId };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error.message,
+      bodyArmed: document.body.classList.contains("is-shard-armed"),
+      armedShard: document.body.dataset.armedShard || "",
+      logs: typeof logs !== "undefined" ? logs.slice(0, 6) : [],
+      resources: (snapshot?.resources || []).map((item) => `${item.resourceKind}:${item.resourceId}:${item.stack}`),
+      inventory: (snapshot?.inventory || []).map((item) => `${item.name}:${item.rarity}`),
     };
-    tick();
-  })`;
+  }
+}
+
+function clickScript() {
+  return `(() => {
+    const connected = typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN;
+    if (connected || document.querySelector('#inventoryButton')) {
+      document.querySelector('#inventoryButton')?.click();
+      return true;
+    }
+    if (typeof connect === 'function') connect();
+    if (!document.querySelector('#equipmentSlots')?.children.length) {
+      const labels = { helmet: 'Helmet', chest: 'Chest', gloves: 'Gloves', boots: 'Boots', weapon: 'Weapon' };
+      document.querySelector('#equipmentSlots').innerHTML = Object.entries(labels).map(([id, label]) => '<div class="equipment-slot equipment-slot--' + id + '" data-slot="' + id + '"><span>' + label + '</span><div class="equipment-item"><em>' + label + '</em></div></div>').join('');
+    }
+    if (!document.querySelector('#inventorySlots')?.children.length) {
+      document.querySelector('#inventorySlots').innerHTML = Array.from({ length: 10 }, (_, index) => '<button type="button" class="item-slot" data-index="' + index + '"></button>').join('');
+    }
+    document.querySelector('#inventoryPanel')?.classList.remove('hidden');
+    return !document.querySelector('#inventoryPanel')?.classList.contains('hidden');
+  })()`;
+}
+
+async function openInventoryForAudit(cdp) {
+  await waitFor(async () => {
+    const result = await cdp.send("Runtime.evaluate", { expression: clickScript(), returnByValue: true });
+    return result.result.value === true;
+  }, 5000, "inventory open");
+}
+
+async function waitForInventory(cdp) {
+  await waitFor(async () => {
+    const result = await cdp.send("Runtime.evaluate", { expression: waitForInventoryScript(), returnByValue: true });
+    return result.result.value === true;
+  }, 5000, "inventory slots");
 }
 
 function auditScript() {
@@ -191,23 +271,11 @@ function auditScript() {
 }
 
 function waitForInventoryScript() {
-  return `new Promise((resolve, reject) => {
-    const started = Date.now();
-    const tick = () => {
+  return `(() => {
       const panelOpen = !document.querySelector('#inventoryPanel')?.classList.contains('hidden');
       const slots = document.querySelectorAll('#inventorySlots .item-slot').length;
-      if (panelOpen && slots === 10) {
-        resolve(true);
-        return;
-      }
-      if (Date.now() - started > 5000) {
-        reject(new Error('Timed out waiting for inventory slots'));
-        return;
-      }
-      setTimeout(tick, 80);
-    };
-    tick();
-  })`;
+      return panelOpen && slots === 10;
+  })()`;
 }
 
 function assertAudit(name, audit) {

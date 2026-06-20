@@ -43,12 +43,18 @@ async function main() {
     assert(loot.item && loot.item.uid, "private loot should expose an item to its owner");
 
     beta.ws.send(JSON.stringify({ t: "input", dx: 0, dy: 0, attack: false, angle: 0, testWarp: { x: loot.x, y: loot.y } }));
+    const pickup = await waitForMessage(beta, (message) => message.t === "pickup" && message.kind === "item");
+    assert(pickup.name, "item pickup should include a name");
     const betaCollected = await waitForState(beta, (state) => state.snapshot.inventory.length === 1);
     const itemId = betaCollected.snapshot.inventory[0].uid;
 
     beta.ws.send(JSON.stringify({ t: "equipItem", itemId }));
     const betaEquipped = await waitForState(beta, (state) => Object.values(state.snapshot.equipment).some(Boolean));
     assert(betaEquipped.snapshot.inventory.length === 0, "equipping should remove the item from inventory");
+    beta.ws.send(JSON.stringify({ t: "unequipItem", itemId }));
+    await waitForState(beta, (state) => state.snapshot.inventory.some((item) => item.uid === itemId) && Object.values(state.snapshot.equipment).every((item) => item === null));
+    beta.ws.send(JSON.stringify({ t: "equipItem", itemId }));
+    await waitForState(beta, (state) => Object.values(state.snapshot.equipment).some((item) => item?.uid === itemId));
 
     for (let i = 0; i < 11; i += 1) alpha.ws.send(JSON.stringify({ t: "testGiveItem" }));
     await waitForState(alpha, (state) => state.snapshot.inventory.length === 10);

@@ -18,6 +18,7 @@ const buildings = [
   ["marketplace.png", drawMarketplace],
   ["leaderboard.png", drawLeaderboard],
   ["wishing-well.png", drawWishingWell],
+  ["chest.png", drawChest],
 ];
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -110,6 +111,25 @@ function drawWishingWell(img) {
   rect(img, 31, 94, 67, 3, "#151211");
   sparkle(img, 62, 86, "#8ee8ff");
   sparkle(img, 69, 84, "#d9fbff");
+}
+
+function drawChest(img) {
+  shadow(img, 64, 99, 36, 8);
+  rect(img, 28, 72, 72, 22, "#2a1710");
+  rect(img, 31, 62, 66, 29, "#6f3f22");
+  rect(img, 35, 66, 58, 20, "#9b6231");
+  rect(img, 38, 70, 16, 13, "#5a2f1a");
+  rect(img, 72, 70, 17, 13, "#5a2f1a");
+  rect(img, 30, 58, 68, 12, "#3b2318");
+  rect(img, 34, 54, 60, 11, "#8c542d");
+  rect(img, 41, 50, 46, 8, "#b97838");
+  rect(img, 59, 66, 11, 15, "#d2aa52");
+  rect(img, 62, 70, 5, 5, "#f0d878");
+  rect(img, 32, 63, 4, 26, "#d2aa52");
+  rect(img, 91, 63, 4, 26, "#d2aa52");
+  rect(img, 36, 87, 55, 4, "#25150e");
+  rect(img, 22, 93, 84, 3, "#151211");
+  sparkle(img, 64, 71, "#fff0a4");
 }
 
 function roof(img, x, y, width, height, dark, mid) {

@@ -31,56 +31,54 @@ async function main() {
     const player = await connectPlayer("ForgeTester");
     await enterCombat(player);
 
-    player.ws.send(JSON.stringify({ t: "testSpawnCurrencyLoot", kind: "fragment", id: "magic", amount: 1 }));
-    await waitForState(player, (state) => resourceAmount(state, "fragment", "magic") >= 1 && state.snapshot.inventory.length === 0);
-
-    player.ws.send(JSON.stringify({ t: "testGiveItem", rarity: "magic", depth: 12 }));
-    const withItem = await waitForState(player, (state) => state.snapshot.inventory.length === 1);
-    const destroyId = withItem.snapshot.inventory[0].uid;
-    player.ws.send(JSON.stringify({ t: "destroyItem", itemId: destroyId }));
-    await waitForState(player, (state) => state.snapshot.inventory.length === 0 && resourceAmount(state, "fragment", "magic") >= 2);
-
-    player.ws.send(JSON.stringify({ t: "testGiveCurrency", kind: "fragment", id: "magic", amount: 3 }));
-    player.ws.send(JSON.stringify({ t: "forgeConvertFragment", fragmentItemId: resourceItem(await waitForState(player, (state) => resourceAmount(state, "fragment", "magic") >= 5), "fragment", "magic").uid }));
-    await waitForState(player, (state) => resourceAmount(state, "shard", "transmutation") === 0 && resourceAmount(state, "fragment", "magic") >= 5);
-
-    await returnToForge(player);
-    const readyToConvert = await waitForState(player, (state) => resourceAmount(state, "fragment", "magic") >= 5);
-    player.ws.send(JSON.stringify({ t: "forgeConvertFragment", fragmentItemId: resourceItem(readyToConvert, "fragment", "magic").uid }));
-    await waitForState(player, (state) => resourceAmount(state, "shard", "transmutation") >= 1 && resourceAmount(state, "fragment", "magic") === 0);
-
     player.ws.send(JSON.stringify({ t: "testGiveItem", rarity: "common", depth: 10 }));
-    const commonState = await waitForState(player, (state) => state.snapshot.inventory.some((item) => item.rarity === "common"));
-    const common = commonState.snapshot.inventory.find((item) => item.rarity === "common");
-    const transmutation = resourceItem(commonState, "shard", "transmutation");
-    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: transmutation.uid, targetItemId: common.uid }));
-    await waitForState(player, (state) => state.snapshot.inventory.some((item) => item.uid === common.uid && item.rarity === "magic" && item.affixes.length >= 1));
-
     player.ws.send(JSON.stringify({ t: "testGiveCurrency", kind: "shard", id: "quality", amount: 1 }));
-    const magicState = await waitForState(player, (state) => state.snapshot.inventory.some((item) => item.uid === common.uid && item.rarity === "magic") && resourceAmount(state, "shard", "quality") >= 1);
-    const quality = resourceItem(magicState, "shard", "quality");
+    const awaySetup = await waitForState(player, (state) => (
+      state.snapshot.inventory.some((item) => item.rarity === "common")
+      && resourceAmount(state, "shard", "quality") === 1
+      && !state.snapshot.forgeNearby
+    ));
+    const commonId = awaySetup.snapshot.inventory.find((item) => item.rarity === "common").uid;
+    const qualityId = resourceItem(awaySetup, "shard", "quality").uid;
+
+    player.ws.send(JSON.stringify({ t: "applyShard", shardItemId: qualityId, targetItemId: commonId }));
+    const looseResult = await waitForMessage(player, (message) => message.t === "forgeResult" && !message.ok);
+    assert(/forge/i.test(looseResult.message || ""), "loose applyShard should explain the forge requirement");
+    await waitForState(player, (state) => resourceAmount(state, "shard", "quality") === 1 && itemById(state, commonId)?.rarity === "common");
+
+    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: qualityId, targetItemId: commonId }));
+    const farApply = await waitForMessage(player, (message) => message.t === "forgeResult" && !message.ok);
+    assert(/forge/i.test(farApply.message || ""), "forgeApplyShard away from forge should explain the forge requirement");
+    await waitForState(player, (state) => resourceAmount(state, "shard", "quality") === 1 && itemById(state, commonId)?.rarity === "common");
+
+    player.ws.send(JSON.stringify({ t: "testGiveCurrency", kind: "fragment", id: "magic", amount: 5 }));
+    await returnToForge(player);
+    const readyToConvert = await waitForState(player, (state) => state.snapshot.forgeNearby && resourceAmount(state, "fragment", "magic") >= 5);
+    player.ws.send(JSON.stringify({ t: "forgeConvertFragment", fragmentItemId: resourceItem(readyToConvert, "fragment", "magic").uid }));
+    const refineResult = await waitForMessage(player, (message) => message.t === "forgeResult" && message.ok && /Converted 5/.test(message.message || ""));
+    assert(/Transmutation Shard/.test(refineResult.message || ""), "refine success should name the created shard");
+    await waitForState(player, (state) => resourceAmount(state, "shard", "transmutation") === 1 && resourceAmount(state, "fragment", "magic") === 0);
+
     player.ws.send(JSON.stringify({ t: "testGiveCurrency", kind: "shard", id: "legend", amount: 1 }));
-    const invalidState = await waitForState(player, (state) => resourceAmount(state, "shard", "legend") >= 1);
-    const legendBefore = resourceAmount(invalidState, "shard", "legend");
-    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: resourceItem(invalidState, "shard", "legend").uid, targetItemId: common.uid }));
-    const invalidAfter = await waitForState(player, (state) => resourceAmount(state, "shard", "legend") >= 0);
-    assert(resourceAmount(invalidAfter, "shard", "legend") === legendBefore, "incompatible shard should not be consumed");
+    const invalidSetup = await waitForState(player, (state) => resourceAmount(state, "shard", "legend") === 1 && resourceAmount(state, "shard", "transmutation") === 1);
+    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: resourceItem(invalidSetup, "shard", "legend").uid, targetItemId: commonId }));
+    await waitForMessage(player, (message) => message.t === "forgeResult" && !message.ok);
+    await waitForState(player, (state) => resourceAmount(state, "shard", "legend") === 1 && itemById(state, commonId)?.rarity === "common");
 
-    player.ws.send(JSON.stringify({ t: "equipItem", itemId: common.uid }));
-    const equipped = await waitForState(player, (state) => Object.values(state.snapshot.equipment).some((item) => item?.uid === common.uid));
-    const beforeHp = equipped.snapshot.players.find((entry) => entry.id === player.id).maxHp;
-    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: quality.uid, targetItemId: common.uid }));
-    const afterQuality = await waitForState(player, (state) => Object.values(state.snapshot.equipment).some((item) => item?.uid === common.uid && item.quality === 1));
-    const afterHp = afterQuality.snapshot.players.find((entry) => entry.id === player.id).maxHp;
-    assert(afterHp >= beforeHp, "crafting equipped item should keep stats recalculated");
-    assert(magicState.snapshot.forgeNearby, "player should be at the forge for craft checks");
+    const transmutation = resourceItem(await waitForState(player, (state) => resourceAmount(state, "shard", "transmutation") === 1), "shard", "transmutation");
+    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: transmutation.uid, targetItemId: commonId }));
+    await waitForMessage(player, (message) => message.t === "forgeResult" && message.ok && /Transmutation Shard applied/i.test(message.message || ""));
+    await waitForState(player, (state) => {
+      const item = itemById(state, commonId);
+      return item?.rarity === "magic" && (item.affixes || []).length >= 1 && resourceAmount(state, "shard", "transmutation") === 0;
+    });
 
-    player.ws.send(JSON.stringify({ t: "testGiveCurrency", kind: "fragment", id: "rare", amount: 2 }));
-    await waitForState(player, (state) => resourceAmount(state, "fragment", "rare") === 2);
-    player.ws.send(JSON.stringify({ t: "testKillPlayer" }));
-    await waitForMessage(player, (message) => message.t === "death");
-    player.ws.send(JSON.stringify({ t: "respawn" }));
-    await waitForState(player, (state) => (state.snapshot.resources || []).length === 0);
+    player.ws.send(JSON.stringify({ t: "equipItem", itemId: commonId }));
+    const equipped = await waitForState(player, (state) => Object.values(state.snapshot.equipment || {}).some((item) => item?.uid === commonId));
+    player.ws.send(JSON.stringify({ t: "forgeApplyShard", shardItemId: qualityId, targetItemId: commonId }));
+    const equippedResult = await waitForMessage(player, (message) => message.t === "forgeResult" && !message.ok);
+    assert(/inventory/i.test(equippedResult.message || ""), "equipped item refusal should ask for inventory first");
+    await waitForState(player, (state) => resourceAmount(state, "shard", "quality") === resourceAmount(equipped, "shard", "quality"));
 
     player.ws.close();
     console.log("Forge flow test passed.");
@@ -88,6 +86,12 @@ async function main() {
     server.kill();
     if (process.exitCode && stderr) console.error(stderr);
   }
+}
+
+function itemById(state, itemId) {
+  return (state.snapshot.inventory || []).find((item) => item.uid === itemId)
+    || Object.values(state.snapshot.equipment || {}).find((item) => item?.uid === itemId)
+    || null;
 }
 
 function resourceItem(state, kind, id) {

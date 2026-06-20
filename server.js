@@ -15,6 +15,7 @@ const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/sit
 const SOLANA_CHAIN_ID = process.env.SOLANA_CHAIN_ID || "mainnet";
 const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || `http://localhost:${PORT}`;
 const SESSION_TOKEN_MAX = 160;
+const TEST_BROWSER_WALLET = "test-browser";
 const TILE = 32;
 const WORLD_W = 80;
 const WORLD_H = 80;
@@ -28,10 +29,14 @@ const DT = 1 / TICK_RATE;
 const MAX_DEPTH = 100;
 const COMBAT_WORLD_PREFIX = "combat";
 const INVENTORY_SIZE = 10;
+const CHEST_SIZE = 20;
 const EQUIPMENT_SLOTS = ["helmet", "chest", "gloves", "boots", "weapon"];
 const FORGE_X = 28 * TILE;
 const FORGE_Y = 42 * TILE;
 const FORGE_RADIUS = 92;
+const CHEST_X = 52 * TILE;
+const CHEST_Y = 54 * TILE;
+const CHEST_RADIUS = 92;
 const RARITIES = [
   { id: "common", weight: 720, color: "#b9b1a0", affixMin: 0, affixMax: 0 },
   { id: "magic", weight: 210, color: "#58c46d", affixMin: 1, affixMax: 2 },
@@ -198,9 +203,17 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/api/session") {
     const session = getRequestSession(req);
     if (!session && process.env.LEGACY_TEST_MODE === "1") {
+      const profile = getProfile(TEST_BROWSER_WALLET);
+      if (!profile.characterName) {
+        profile.characterName = "Tester";
+        profile.nameKey = normalizeName(profile.characterName);
+        profile.appearance = randomAppearance();
+      }
+      const token = createSession(TEST_BROWSER_WALLET);
       sendJson(res, {
         ok: true,
-        profile: { wallet: "test", characterName: "Tester", needsName: false, renown: 0, records: { maxLevel: 1, longestLife: 0, mostKills: 0 } },
+        sessionToken: token,
+        profile: publicProfile(profile),
         turnstileSiteKey: "",
       });
       return;
@@ -327,7 +340,10 @@ const server = http.createServer((req, res) => {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": mime[path.extname(filePath)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": mime[path.extname(filePath)] || "application/octet-stream",
+      "Cache-Control": "no-store",
+    });
     res.end(data);
   });
 });
@@ -381,18 +397,23 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.t === "unequipItem") {
+      unequipItem(player, msg.itemId);
+      return;
+    }
+
     if (msg.t === "destroyItem") {
       destroyInventoryItem(player, msg.itemId);
       return;
     }
 
     if (msg.t === "forgeCraft") {
-      applyForgeCraft(player, msg);
+      sendForgeResult(player, false, "Use shards directly in the forge.");
       return;
     }
 
     if (msg.t === "forgeConvert") {
-      convertFragments(player, msg.fragment);
+      sendForgeResult(player, false, "Select a fragment stack in the forge.");
       return;
     }
 
@@ -401,8 +422,33 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.t === "applyShard") {
+      rejectLooseShardUse(player);
+      return;
+    }
+
     if (msg.t === "forgeConvertFragment") {
       convertFragmentStack(player, msg.fragmentItemId);
+      return;
+    }
+
+    if (msg.t === "chestDeposit") {
+      depositChestItem(player, msg.itemId);
+      return;
+    }
+
+    if (msg.t === "chestWithdraw") {
+      withdrawChestItem(player, msg.itemId);
+      return;
+    }
+
+    if (msg.t === "chestDepositGold") {
+      depositChestGold(player, msg.amount);
+      return;
+    }
+
+    if (msg.t === "chestWithdrawGold") {
+      withdrawChestGold(player, msg.amount);
       return;
     }
 
@@ -425,6 +471,11 @@ wss.on("connection", (ws) => {
 
     if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testGiveCurrency") {
       addResource(player, msg.kind || "fragment", msg.id || "magic", Number(msg.amount) || 1);
+      return;
+    }
+
+    if (process.env.LEGACY_TEST_MODE === "1" && msg.t === "testGiveGold") {
+      player.gold += Math.max(0, Math.round(Number(msg.amount) || 0));
       return;
     }
 
@@ -464,7 +515,7 @@ function createPlayer(ws, msg) {
   let profile = session?.profile || null;
   let wallet = session?.wallet || null;
   if (!profile && process.env.LEGACY_TEST_MODE === "1") {
-    wallet = cleanId(msg.accountId) || `test-${cryptoId()}`;
+    wallet = cleanId(msg.accountId) || TEST_BROWSER_WALLET;
     profile = getProfile(wallet);
     if (!profile.characterName) {
       profile.characterName = cleanName(msg.name, "Tester");
@@ -676,14 +727,27 @@ function collectLoot(player) {
     if (drop.ownerId !== player.id || distance(player, drop) >= 24 + stats.pickupRange) continue;
     if (drop.kind === "currency") {
       addResource(player, drop.currency.kind, drop.currency.id, drop.currency.amount);
+      sendPickupLog(player, {
+        kind: "resource",
+        name: drop.currency.label,
+        amount: drop.currency.amount,
+        resourceKind: drop.currency.kind,
+        resourceId: drop.currency.id,
+      });
       loot.splice(i, 1);
       continue;
     }
     if (player.inventory.length < INVENTORY_SIZE) {
       player.inventory.push(drop.item);
+      sendPickupLog(player, { kind: "item", name: drop.item.name, item: publicItem(drop.item) });
       loot.splice(i, 1);
     }
   }
+}
+
+function sendPickupLog(player, payload) {
+  if (!player?.ws || player.ws.readyState !== WebSocket.OPEN) return;
+  player.ws.send(JSON.stringify({ t: "pickup", ...payload }));
 }
 
 function maybeWarp(player) {
@@ -908,6 +972,10 @@ function snapshotWorld(worldId, includeTiles, viewer) {
     resources: viewer ? (viewer.resources || []).map(publicItem) : [],
     equipment: viewer ? publicEquipment(viewer.equipment) : emptyEquipment(),
     forgeNearby: viewer ? isNearForge(viewer) : false,
+    chestNearby: viewer ? isNearChest(viewer) : false,
+    chestSize: viewer ? chestSize(viewer.meta) : CHEST_SIZE,
+    chestItems: viewer ? chestItems(viewer.meta).map(publicItem) : [],
+    chestGold: viewer ? chestGold(viewer.meta) : 0,
     inventorySize: INVENTORY_SIZE,
     equipmentSlots: EQUIPMENT_SLOTS,
     rarities: RARITIES.map((rarity) => ({ id: rarity.id, color: rarity.color })),
@@ -1527,6 +1595,7 @@ function makeCurrencyLoot(x, y, ownerId, kind, id, amount = 1) {
       amount: Math.max(1, Math.round(amount)),
       label: resource.name,
       rarity,
+      color: resource.color,
       item: publicItem(resource),
     },
   };
@@ -1549,6 +1618,7 @@ function makeResourceItem(kind, id, amount = 1) {
     description: resourceKind === "shard" ? shard.description : FRAGMENT_DESCRIPTIONS[resourceId],
     rarity: resourceKind === "shard" ? shardRarity(resourceId) : resourceId,
     icon: "assets/ui/ui-icon-gold.png",
+    color: resourceKind === "shard" ? shard.color : rarityColor(resourceId),
   };
 }
 
@@ -1647,6 +1717,10 @@ function rollUniquePower() {
 
 function rarityDef(rarity) {
   return RARITIES.find((entry) => entry.id === rarity) || RARITIES[0];
+}
+
+function rarityColor(rarity) {
+  return rarityDef(rarity).color;
 }
 
 function shardRarity(id) {
@@ -1769,37 +1843,42 @@ function applyIncomingDamage(player, rawDamage) {
   if (damage > 0) player.hp -= damage;
 }
 
-function applyForgeCraft(player, msg) {
-  const shard = cleanId(msg.shard);
-  if (SHARDS[shard]) {
-    const stack = (player.resources || []).find((item) => item.resourceKind === "shard" && item.resourceId === shard && item.stack > 0);
-    if (stack) applyForgeShard(player, { shardItemId: stack.uid, targetItemId: msg.itemId, affixId: msg.affixId });
-  }
+function rejectLooseShardUse(player) {
+  sendForgeResult(player, false, "Use shards at the forge.");
 }
 
 function applyForgeShard(player, msg) {
-  if (player.dead || !isNearForge(player)) return;
+  if (player.dead) return sendForgeResult(player, false, "You are dead.");
+  if (!isNearForge(player)) return sendForgeResult(player, false, "Move closer to the forge.");
   const shardStack = findResourceItem(player, msg.shardItemId);
-  if (!shardStack || shardStack.item.resourceKind !== "shard" || shardStack.item.stack <= 0) return;
+  if (!shardStack || shardStack.item.resourceKind !== "shard" || shardStack.item.stack <= 0) return sendForgeResult(player, false, "Shard missing.");
   const shard = shardStack.item.resourceId;
-  const target = findPlayerItem(player, msg.targetItemId || msg.itemId);
-  if (!target || target.item.locked || target.item.destroyed) return;
+  const target = findInventoryItem(player, msg.targetItemId || msg.itemId);
+  if (!target && findEquippedItem(player, msg.targetItemId || msg.itemId)) return sendForgeResult(player, false, "Move item to inventory first.");
+  if (!target) return sendForgeResult(player, false, "Select equipment.");
+  if (target.item.locked || target.item.destroyed) return sendForgeResult(player, false, "Item cannot be modified.");
   const item = target.item;
   const compatibility = shardCompatibility(shard, item);
-  if (!compatibility.ok) return;
+  if (!compatibility.ok) return sendForgeResult(player, false, compatibility.reason);
   let ok = false;
   if (RARITY_UPGRADE_SHARDS[item.rarity]?.shard === shard) ok = upgradeItemRarity(item);
   else if (shard === "chaos") ok = rerollAllAffixes(item);
-  else if (shard === "alteration") ok = rerollOneAffix(item, msg.affixId);
+  else if (shard === "alteration") ok = rerollOneAffix(item);
   else if (shard === "exaltation") ok = addRandomAffix(item);
   else if (shard === "divine") ok = divineItem(item);
-  else if (shard === "purification") ok = purifyItem(item, msg.affixId);
-  else if (shard === "locking") ok = lockAffix(item, msg.affixId);
+  else if (shard === "purification") ok = purifyItem(item);
+  else if (shard === "locking") ok = lockAffix(item);
   else if (shard === "corruption") ok = corruptItem(player, target);
   else if (shard === "quality") ok = improveQuality(item);
-  if (!ok) return;
+  if (!ok) return sendForgeResult(player, false, "Shard had no effect.");
   consumeResource(player, shardStack, 1);
   refreshPlayerVitals(player);
+  sendForgeResult(player, true, `${SHARDS[shard]?.label || "Shard"} applied to ${item.name}.`);
+}
+
+function sendForgeResult(player, ok, message) {
+  if (!player?.ws || player.ws.readyState !== WebSocket.OPEN) return;
+  player.ws.send(JSON.stringify({ t: "forgeResult", ok: Boolean(ok), message }));
 }
 
 function shardCompatibility(shard, item) {
@@ -1867,7 +1946,8 @@ function purifyItem(item, affixId = "") {
 }
 
 function lockAffix(item, affixId = "") {
-  const affix = item.affixes.find((entry) => entry.id === affixId) || item.affixes.find((entry) => !entry.locked);
+  const candidates = item.affixes.filter((entry) => !entry.locked && (!affixId || entry.id === affixId));
+  const affix = candidates[Math.floor(rng() * candidates.length)];
   if (!affix) return false;
   affix.locked = true;
   return true;
@@ -1910,27 +1990,39 @@ function consumeTemporaryLocks(item) {
   for (const affix of item.affixes || []) affix.locked = false;
 }
 
-function convertFragments(player, fragment) {
-  if (player.dead || !isNearForge(player)) return;
-  const id = cleanId(fragment);
-  const stack = (player.resources || []).find((item) => item.resourceKind === "fragment" && item.resourceId === id && item.stack >= 5);
-  if (stack) convertFragmentStack(player, stack.uid);
-}
-
 function convertFragmentStack(player, fragmentItemId) {
-  if (player.dead || !isNearForge(player)) return;
+  if (player.dead) return sendForgeResult(player, false, "You are dead.");
+  if (!isNearForge(player)) return sendForgeResult(player, false, "Move closer to the forge.");
   const stack = findResourceItem(player, fragmentItemId);
-  if (!stack || stack.item.resourceKind !== "fragment" || stack.item.stack < 5) return;
+  if (!stack || stack.item.resourceKind !== "fragment") return sendForgeResult(player, false, "Fragment stack missing.");
+  if (stack.item.stack < 5) return sendForgeResult(player, false, "Requires 5 fragments.");
   const shard = FRAGMENT_TO_SHARD[stack.item.resourceId];
-  if (!shard) return;
+  if (!shard) return sendForgeResult(player, false, "Unknown fragment.");
+  const fragmentName = stack.item.name || `${capitalize(stack.item.resourceId)} Fragment`;
+  const shardName = SHARDS[shard]?.label || "Shard";
   consumeResource(player, stack, 5);
   addResource(player, "shard", shard, 1);
+  sendForgeResult(player, true, `Converted 5 ${fragmentName}s into ${shardName}.`);
 }
 
 function findPlayerItem(player, itemId) {
   const uid = cleanId(itemId);
+  const inventoryTarget = findInventoryItem(player, uid);
+  if (inventoryTarget) return inventoryTarget;
+  const equipmentTarget = findEquippedItem(player, uid);
+  if (equipmentTarget) return equipmentTarget;
+  return null;
+}
+
+function findInventoryItem(player, itemId) {
+  const uid = cleanId(itemId);
   const inventoryIndex = player.inventory.findIndex((item) => item.uid === uid);
   if (inventoryIndex !== -1) return { item: player.inventory[inventoryIndex], location: "inventory", index: inventoryIndex };
+  return null;
+}
+
+function findEquippedItem(player, itemId) {
+  const uid = cleanId(itemId);
   for (const slot of EQUIPMENT_SLOTS) {
     if (player.equipment[slot]?.uid === uid) return { item: player.equipment[slot], location: "equipment", slot };
   }
@@ -1986,6 +2078,116 @@ function isNearForge(player) {
   return player.world === "haven" && distance(player, { x: FORGE_X, y: FORGE_Y }) <= FORGE_RADIUS;
 }
 
+function isNearChest(player) {
+  return player.world === "haven" && distance(player, { x: CHEST_X, y: CHEST_Y }) <= CHEST_RADIUS;
+}
+
+function ensureChest(profile) {
+  profile.chest = profile.chest && typeof profile.chest === "object" ? profile.chest : {};
+  profile.chest.size = Math.max(CHEST_SIZE, Math.round(Number(profile.chest.size) || CHEST_SIZE));
+  profile.chest.items = cleanSavedChestItems(profile.chest.items);
+  profile.chest.gold = Math.max(0, Math.round(Number(profile.chest.gold) || 0));
+  return profile.chest;
+}
+
+function chestSize(profile) {
+  return ensureChest(profile).size;
+}
+
+function chestItems(profile) {
+  return ensureChest(profile).items;
+}
+
+function chestGold(profile) {
+  return ensureChest(profile).gold;
+}
+
+function chestHasRoom(profile, item) {
+  const chest = ensureChest(profile);
+  if (item?.type === "resource") {
+    return chest.items.some((entry) => entry.type === "resource" && entry.resourceKind === item.resourceKind && entry.resourceId === item.resourceId)
+      || chest.items.length < chest.size;
+  }
+  return chest.items.length < chest.size;
+}
+
+function addChestItem(profile, item) {
+  const chest = ensureChest(profile);
+  if (!item) return false;
+  if (item.type === "resource") {
+    const existing = chest.items.find((entry) => entry.type === "resource" && entry.resourceKind === item.resourceKind && entry.resourceId === item.resourceId);
+    if (existing) {
+      existing.stack += Math.max(1, Math.round(Number(item.stack) || 1));
+      return true;
+    }
+  }
+  if (chest.items.length >= chest.size) return false;
+  chest.items.push(item);
+  return true;
+}
+
+function removeChestItem(profile, itemId) {
+  const chest = ensureChest(profile);
+  const uid = cleanId(itemId);
+  const index = chest.items.findIndex((item) => item.uid === uid);
+  if (index === -1) return null;
+  const [item] = chest.items.splice(index, 1);
+  return item;
+}
+
+function depositChestItem(player, itemId) {
+  if (player.dead || !isNearChest(player) || !player.meta) return;
+  const resourceStack = findResourceItem(player, itemId);
+  if (resourceStack) {
+    const item = resourceStack.item;
+    if (!chestHasRoom(player.meta, item)) return;
+    player.resources.splice(resourceStack.index, 1);
+    if (!addChestItem(player.meta, item)) player.resources.splice(resourceStack.index, 0, item);
+    return;
+  }
+  const target = findPlayerItem(player, itemId);
+  if (!target || !chestHasRoom(player.meta, target.item)) return;
+  removePlayerItem(player, target);
+  if (!addChestItem(player.meta, target.item)) {
+    if (target.location === "inventory") player.inventory.splice(target.index, 0, target.item);
+    if (target.location === "equipment") player.equipment[target.slot] = target.item;
+  }
+  refreshPlayerVitals(player);
+}
+
+function withdrawChestItem(player, itemId) {
+  if (player.dead || !isNearChest(player) || !player.meta) return;
+  const item = removeChestItem(player.meta, itemId);
+  if (!item) return;
+  if (item.type === "resource") {
+    addResource(player, item.resourceKind, item.resourceId, item.stack);
+    return;
+  }
+  if (player.inventory.length >= INVENTORY_SIZE) {
+    addChestItem(player.meta, item);
+    return;
+  }
+  player.inventory.push(item);
+}
+
+function depositChestGold(player, amount) {
+  if (player.dead || !isNearChest(player) || !player.meta) return;
+  const value = clamp(Math.round(Number(amount) || 0), 0, Math.max(0, Math.round(Number(player.gold) || 0)));
+  if (value <= 0) return;
+  const chest = ensureChest(player.meta);
+  player.gold -= value;
+  chest.gold += value;
+}
+
+function withdrawChestGold(player, amount) {
+  if (player.dead || !isNearChest(player) || !player.meta) return;
+  const chest = ensureChest(player.meta);
+  const value = clamp(Math.round(Number(amount) || 0), 0, chest.gold);
+  if (value <= 0) return;
+  chest.gold -= value;
+  player.gold += value;
+}
+
 function equipInventoryItem(player, itemId) {
   if (player.dead) return;
   const index = player.inventory.findIndex((item) => item.uid === itemId);
@@ -2003,6 +2205,19 @@ function equipInventoryItem(player, itemId) {
   }
   player.equipment[item.type] = item;
   refreshPlayerVitals(player);
+}
+
+function unequipItem(player, itemId) {
+  if (player.dead || player.inventory.length >= INVENTORY_SIZE) return;
+  const uid = cleanId(itemId);
+  for (const slot of EQUIPMENT_SLOTS) {
+    const item = player.equipment[slot];
+    if (!item || item.uid !== uid) continue;
+    player.equipment[slot] = null;
+    player.inventory.push(item);
+    refreshPlayerVitals(player);
+    return;
+  }
 }
 
 function destroyInventoryItem(player, itemId) {
@@ -2040,6 +2255,7 @@ function publicItem(item) {
       description: item.description,
       rarity: item.rarity,
       icon: item.icon,
+      color: item.color || rarityColor(item.rarity),
     };
   }
   return {
@@ -2080,6 +2296,7 @@ function getProfile(wallet) {
       characterName: "",
       nameKey: "",
       appearance: randomAppearance(),
+      chest: { size: CHEST_SIZE, items: [], gold: 0 },
       lastLiveState: null,
       generation: 0,
       renown: 0,
@@ -2093,6 +2310,7 @@ function getProfile(wallet) {
   profile.characterName = profile.characterName || "";
   profile.nameKey = profile.nameKey || normalizeName(profile.characterName);
   profile.appearance = cleanAppearance(profile.appearance || randomAppearance());
+  ensureChest(profile);
   profile.lastLiveState = profile.lastLiveState || null;
   profile.graves = Array.isArray(profile.graves) ? profile.graves : [];
   profile.relics = Array.isArray(profile.relics) ? profile.relics : [];
@@ -2286,6 +2504,22 @@ function cleanSavedResources(items) {
   return mergeResourceStacks(Array.isArray(items) ? items.map(cleanSavedResource).filter(Boolean) : []);
 }
 
+function cleanSavedChestItems(items) {
+  const out = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const cleanItem = item?.type === "resource" ? cleanSavedResource(item) : cleanSavedItem(item);
+    if (!cleanItem) continue;
+    if (cleanItem.type === "resource") {
+      const existing = out.find((entry) => entry.type === "resource" && entry.resourceKind === cleanItem.resourceKind && entry.resourceId === cleanItem.resourceId);
+      if (existing) existing.stack += cleanItem.stack;
+      else out.push(cleanItem);
+    } else {
+      out.push(cleanItem);
+    }
+  }
+  return out;
+}
+
 function cleanSavedEquipment(equipment) {
   const out = emptyEquipment();
   for (const slot of EQUIPMENT_SLOTS) out[slot] = cleanSavedItem(equipment?.[slot]);
@@ -2322,7 +2556,9 @@ function cleanSavedResource(item) {
   const id = cleanId(item.resourceId);
   if (kind === "shard" && !SHARDS[id]) return null;
   if (kind === "fragment" && !FRAGMENT_LABELS[id]) return null;
-  return makeResourceItem(kind, id, Math.max(1, Math.round(Number(item.stack) || 1)));
+  const resource = makeResourceItem(kind, id, Math.max(1, Math.round(Number(item.stack) || 1)));
+  resource.uid = cleanId(item.uid) || resource.uid;
+  return resource;
 }
 
 function craftingToResources(crafting) {
